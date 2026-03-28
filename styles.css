@@ -99,6 +99,10 @@ body {
   background: #ffffff;
 }
 
+.panel-area.flashing {
+  visibility: hidden;
+}
+
 .panel {
   display: none;
 }
@@ -221,10 +225,6 @@ body {
 .boot-list {
   width: 760px;
   background: var(--sidebar-color);
-}
-
-.boot-list.flashing {
-  visibility: hidden;
 }
 
 .boot-item {

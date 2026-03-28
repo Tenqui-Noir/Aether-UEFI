@@ -7,7 +7,7 @@ const panels = document.querySelectorAll(".panel");
 const toggleButtons = document.querySelectorAll(".toggle-button");
 const bootItems = document.querySelectorAll(".boot-item");
 const bootChecks = document.querySelectorAll(".boot-check");
-const bootList = document.querySelector(".boot-list");
+const panelArea = document.querySelector(".panel-area");
 
 function resizeStage() {
   const scale = Math.min(
@@ -20,8 +20,8 @@ function resizeStage() {
   stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 }
 
-function flashBootList() {
-  if (!bootList) {
+function flashPanelArea() {
+  if (!panelArea) {
     return;
   }
 
@@ -30,9 +30,9 @@ function flashBootList() {
     return;
   }
 
-  bootList.classList.add("flashing");
+  panelArea.classList.add("flashing");
   window.setTimeout(() => {
-    bootList.classList.remove("flashing");
+    panelArea.classList.remove("flashing");
   }, 10);
 }
 
@@ -75,7 +75,7 @@ bootItems.forEach((item) => {
   item.addEventListener("click", () => {
     bootItems.forEach((button) => button.classList.remove("active"));
     item.classList.add("active");
-    flashBootList();
+    flashPanelArea();
   });
 });
 
@@ -84,6 +84,6 @@ bootChecks.forEach((check) => {
     event.stopPropagation();
     check.classList.toggle("checked");
     resetBootHighlight();
-    flashBootList();
+    flashPanelArea();
   });
 });
