@@ -117,6 +117,10 @@ body.auth-gate-fading-out .auth-gate-content {
   opacity: 0;
 }
 
+.pre-uefi-screen.is-transition-locked .pre-uefi-interactive {
+  pointer-events: none;
+}
+
 .pre-uefi-view {
   display: none;
   opacity: 0;
@@ -135,13 +139,13 @@ body.auth-gate-fading-out .auth-gate-content {
 .pre-uefi-view.is-fading-out {
   display: block;
   opacity: 0;
-  transition: opacity 300ms linear;
+  transition: opacity 200ms linear;
 }
 
 .pre-uefi-view.is-fading-in {
   display: block;
   opacity: 1;
-  transition: opacity 300ms linear;
+  transition: opacity 200ms linear;
 }
 
 .pre-uefi-title {
@@ -344,7 +348,7 @@ body.pre-uefi-active .pre-uefi-screen {
 body.pre-uefi-fading-in .pre-uefi-screen {
   display: block;
   opacity: 1;
-  transition: opacity 300ms linear;
+  transition: opacity 200ms linear;
 }
 
 body.auth-gate .stage {
@@ -629,6 +633,34 @@ body.restricted-mode [data-panel-content="boot"] .trash-icon {
   background: var(--button-pressed-color);
 }
 
+.security-button.is-disabled {
+  background: var(--topbar-color);
+  color: #9e9e9e;
+}
+
+.security-section.is-disabled .panel-title,
+.security-section.is-disabled .security-copy {
+  color: #9e9e9e;
+}
+
+.security-section.is-disabled .security-button {
+  background: var(--topbar-color);
+  color: #9e9e9e;
+}
+
+.security-section.is-disabled {
+  color: #9e9e9e;
+}
+
+.security-section.is-disabled .panel-spacer,
+.security-section.is-disabled .security-button-wrap {
+  pointer-events: none;
+}
+
+.security-section.is-disabled .security-button {
+  pointer-events: none;
+}
+
 body.keyboard-mode .security-button.keyboard-selected {
   position: relative;
 }
@@ -821,7 +853,7 @@ body.keyboard-mode .toggle-control.keyboard-selected::after {
   margin-left: 20px;
   flex: 0 0 auto;
   visibility: hidden;
-  background: center / contain no-repeat url("img/trash.png");
+  background: center / contain no-repeat url("../../img/trash.png");
 }
 
 .boot-item.active .trash-icon {

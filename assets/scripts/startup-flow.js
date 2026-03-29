@@ -9,7 +9,7 @@ export function createStartupFlow({
     const waitHoldDelay = 600;
     const authFadeDuration = 300;
     const blackHoldDelay = 300;
-    const preUefiFadeDuration = 300;
+    const preUefiFadeDuration = 200;
     const menuDelay = 1000;
 
     preUefiMainView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");

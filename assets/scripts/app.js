@@ -19,6 +19,7 @@ const bootConfigListWrap = document.getElementById("bootConfigListWrap");
 const dateTimeInput = document.getElementById("dateTimeInput");
 const currentDateTimeValue = document.getElementById("currentDateTimeValue");
 const secureBootSummary = document.getElementById("secureBootSummary");
+const secureBootSection = document.getElementById("secureBootSection");
 const passwordDialog = document.getElementById("passwordDialog");
 const passwordDialogOpen = document.querySelector('[data-panel-content="security"] .security-button');
 const secureBootDialog = document.getElementById("secureBootDialog");
@@ -73,6 +74,8 @@ let restrictedMode = false;
 let activePreUefiActionIndex = 0;
 let preUefiEnterPressed = false;
 let currentPreUefiView = "main";
+let preUefiInteractionLocked = false;
+let preUefiInteractionLockTimer = null;
 
 let dragCandidateItem = null;
 let draggedBootItem = null;
@@ -268,6 +271,31 @@ function syncBootConfigurationLockState() {
 
 function isRestrictedPanel(panelKey) {
   return restrictedMode && ["security", "boot", "date-time"].includes(panelKey);
+}
+
+function isCsmEnabled() {
+  return Boolean(persistedState.toggles["csm-support"]);
+}
+
+function syncSecurityDependencies() {
+  const secureBootDisabled = isCsmEnabled();
+  if (secureBootDisabled) {
+    persistedState.secureBootOption = "disabled";
+  } else if (persistedState.secureBootOption === "disabled") {
+    persistedState.secureBootOption = "microsoft-only";
+  }
+
+  saveState();
+
+  applySecureBootSummary(persistedState.secureBootOption);
+  secureBootSection?.classList.toggle("is-disabled", secureBootDisabled);
+  secureBootDialogOpen?.classList.toggle("is-disabled", secureBootDisabled);
+
+  if (secureBootDisabled && getVisiblePanelKey() === "security" && navigationArea === "panel") {
+    const controls = getPanelControls("security");
+    const nextIndex = controls.findIndex((control) => !control.classList.contains("is-disabled"));
+    panelKeyboardIndex.security = nextIndex >= 0 ? nextIndex : 0;
+  }
 }
 
 function syncRestrictedMode() {
@@ -626,7 +654,9 @@ function getPanelControls(panelKey) {
   }
   switch (panelKey) {
     case "security":
-      return Array.from(document.querySelectorAll('[data-panel-content="security"] .security-button, [data-panel-content="security"] .toggle-control'));
+      return Array.from(
+        document.querySelectorAll('[data-panel-content="security"] .security-button, [data-panel-content="security"] .toggle-control')
+      ).filter((control) => !control.classList.contains("is-disabled"));
     case "boot":
       if (isBootConfigurationLocked()) {
         return Array.from(document.querySelectorAll('[data-panel-content="boot"] .toggle-control'));
@@ -723,6 +753,19 @@ function syncDeleteBootActionSelection(index) {
   deleteBootActions.forEach((button, buttonIndex) => {
     button.classList.toggle("is-selected", buttonIndex === activeDeleteBootActionIndex);
   });
+}
+
+function lockPreUefiInteraction(duration) {
+  preUefiInteractionLocked = true;
+  preUefiScreen?.classList.add("is-transition-locked");
+  if (preUefiInteractionLockTimer) {
+    window.clearTimeout(preUefiInteractionLockTimer);
+  }
+  preUefiInteractionLockTimer = window.setTimeout(() => {
+    preUefiInteractionLocked = false;
+    preUefiScreen?.classList.remove("is-transition-locked");
+    preUefiInteractionLockTimer = null;
+  }, duration);
 }
 
 function setActivePanel(panelKey, options = {}) {
@@ -851,11 +894,16 @@ function enterUefiFromPreScreen() {
 }
 
 function switchPreUefiView(nextView) {
+  if (preUefiInteractionLocked) {
+    return;
+  }
   const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
   const nextViewElement = nextView === "device" ? devicePageView : preUefiMainView;
   if (!currentViewElement || !nextViewElement || currentViewElement === nextViewElement) {
     return;
   }
+
+  lockPreUefiInteraction(420);
 
   currentViewElement.classList.remove("is-active", "is-fading-in");
   currentViewElement.classList.add("is-fading-out");
@@ -873,9 +921,9 @@ function switchPreUefiView(nextView) {
       window.setTimeout(() => {
         nextViewElement.classList.remove("is-fading-in");
         nextViewElement.classList.add("is-active");
-      }, 300);
+      }, 200);
     });
-  }, 300);
+  }, 200);
 }
 
 function setDevicePageNavPressed(pressed) {
@@ -1033,7 +1081,7 @@ function applyPersistedState() {
 
   syncBootConfigurationLockState();
   syncRestrictedMode();
-  applySecureBootSummary(persistedState.secureBootOption);
+  syncSecurityDependencies();
 
   setActivePanel("device-info");
 
@@ -1257,7 +1305,7 @@ function handleKeyboardNavigation(event) {
       event.preventDefault();
       const controls = getVisiblePreUefiControls();
       const targetButton = controls[activePreUefiActionIndex];
-      if (event.repeat || preUefiEnterPressed || !targetButton) {
+      if (event.repeat || preUefiEnterPressed || preUefiInteractionLocked || !targetButton) {
         return;
       }
       preUefiEnterPressed = true;
@@ -1337,7 +1385,7 @@ function handleKeyboardNavigation(event) {
     if (event.key === "Delete") {
       if (currentBootControl && currentBootControl.classList.contains("boot-item")) {
         event.preventDefault();
-        openDeleteBootDialog(currentBootControl, true);
+        openDeleteBootDialog(currentBootControl, false);
         return;
       }
     }
@@ -1424,6 +1472,8 @@ toggleButtons.forEach((button) => {
     syncToggleAriaLabel(button);
     syncToggleText(button);
     persistToggle(button);
+    syncSecurityDependencies();
+    saveState();
   });
 });
 
@@ -1439,6 +1489,7 @@ bootToggleButtons.forEach((button) => {
     syncToggleAriaLabel(button);
     syncToggleText(button);
     persistToggle(button);
+    syncSecurityDependencies();
     flashBootToggleResult();
   });
 });
@@ -1453,6 +1504,9 @@ bootItems.forEach((item) => {
     if (isBootInteractionDisabled()) {
       return;
     }
+    navigationArea = "panel";
+    panelKeyboardIndex.boot = getPanelControls("boot").indexOf(item);
+    applyKeyboardSelection();
     item.dataset.wasActive = item.classList.contains("active") ? "true" : "false";
     setBootHighlight(item);
     dragCandidateItem = item;
@@ -1477,6 +1531,9 @@ bootItems.forEach((item) => {
       return;
     }
 
+    navigationArea = "panel";
+    panelKeyboardIndex.boot = getPanelControls("boot").indexOf(item);
+    applyKeyboardSelection();
     setBootHighlight(item);
     flashBootDirtyRegion();
     item.dataset.wasActive = "false";
@@ -1503,6 +1560,9 @@ bootItems.forEach((item) => {
     }
     event.preventDefault();
     event.stopPropagation();
+    navigationArea = "panel";
+    panelKeyboardIndex.boot = getPanelControls("boot").indexOf(item);
+    applyKeyboardSelection();
     setBootHighlight(item);
     openDeleteBootDialog(item, false);
   });
@@ -1578,6 +1638,9 @@ bootChecks.forEach((check) => {
 
     event.stopPropagation();
     const targetItem = check.closest(".boot-item");
+    navigationArea = "panel";
+    panelKeyboardIndex.boot = getPanelControls("boot").indexOf(targetItem);
+    applyKeyboardSelection();
     setBootHighlight(targetItem);
     check.classList.toggle("checked");
     persistBootChecked();
@@ -1752,6 +1815,9 @@ if (secureBootDialogOpen && secureBootDialog) {
       return;
     }
     if (restrictedMode) {
+      return;
+    }
+    if (isCsmEnabled()) {
       return;
     }
     openSecureBootDialog(event.detail === 0);
@@ -2233,6 +2299,10 @@ if (enterUefiButton) {
     if (event.button !== 0 && event.detail !== 0) {
       return;
     }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    lockPreUefiInteraction(400);
     if (persistedState.uefiPassword) {
       openAuthPasswordDialog(false);
       return;
@@ -2246,6 +2316,9 @@ if (useDeviceButton) {
     if (event.button !== 0 && event.detail !== 0) {
       return;
     }
+    if (preUefiInteractionLocked) {
+      return;
+    }
     switchPreUefiView("device");
   });
 }
@@ -2253,6 +2326,9 @@ if (useDeviceButton) {
 if (devicePageBackButton) {
   devicePageBackButton.addEventListener("click", (event) => {
     if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
       return;
     }
     switchPreUefiView("main");
