@@ -30,8 +30,12 @@ const passwordSetupError = document.getElementById("passwordSetupError");
 const uefiShell = document.getElementById("uefiShell");
 const restartButton = document.getElementById("restartButton");
 const preUefiScreen = document.getElementById("preUefiScreen");
-const preUefiActions = Array.from(document.querySelectorAll(".pre-uefi-action"));
+const preUefiMainView = document.getElementById("preUefiMainView");
+const devicePageView = document.getElementById("devicePageView");
+const preUefiActions = Array.from(document.querySelectorAll(".pre-uefi-interactive"));
 const enterUefiButton = document.getElementById("enterUefiButton");
+const useDeviceButton = document.getElementById("useDeviceButton");
+const devicePageBackButton = document.getElementById("devicePageBackButton");
 const modalInputs = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-input")) : [];
 const modalActions = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-action")) : [];
 const modalConfirmButton = modalActions[0] || null;
@@ -66,6 +70,7 @@ let authPasswordIgnoreInitialEnter = false;
 let restrictedMode = false;
 let activePreUefiActionIndex = 0;
 let preUefiEnterPressed = false;
+let currentPreUefiView = "main";
 
 let dragCandidateItem = null;
 let draggedBootItem = null;
@@ -274,22 +279,36 @@ function syncRestrictedMode() {
 }
 
 function syncPreUefiSelection(index = 0) {
-  if (preUefiActions.length === 0) {
+  const controls = getVisiblePreUefiControls();
+  if (controls.length === 0) {
     return;
   }
-  activePreUefiActionIndex = Math.max(0, Math.min(index, preUefiActions.length - 1));
-  preUefiActions.forEach((button, buttonIndex) => {
+  activePreUefiActionIndex = Math.max(0, Math.min(index, controls.length - 1));
+  preUefiActions.forEach((button) => {
+    button.classList.remove("is-selected");
+  });
+  controls.forEach((button, buttonIndex) => {
     button.classList.toggle("is-selected", buttonIndex === activePreUefiActionIndex);
   });
 }
 
 function showPreUefiScreen() {
   document.body.classList.add("pre-uefi-active");
+  currentPreUefiView = "main";
+  preUefiMainView?.classList.add("is-active");
+  devicePageView?.classList.remove("is-active", "is-fading-in", "is-fading-out");
   syncPreUefiSelection(0);
 }
 
 function hidePreUefiScreen() {
   document.body.classList.remove("pre-uefi-active");
+}
+
+function getVisiblePreUefiControls() {
+  if (currentPreUefiView === "device") {
+    return Array.from(document.querySelectorAll("#devicePageView .pre-uefi-interactive"));
+  }
+  return Array.from(document.querySelectorAll("#preUefiMainView .pre-uefi-interactive"));
 }
 
 function resetClientState() {
@@ -780,6 +799,68 @@ function enterUefiFromPreScreen() {
   finishAuthGateRevealFast();
 }
 
+function switchPreUefiView(nextView) {
+  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
+  const nextViewElement = nextView === "device" ? devicePageView : preUefiMainView;
+  if (!currentViewElement || !nextViewElement || currentViewElement === nextViewElement) {
+    return;
+  }
+
+  currentViewElement.classList.remove("is-active", "is-fading-in");
+  currentViewElement.classList.add("is-fading-out");
+
+  window.setTimeout(() => {
+    currentViewElement.classList.remove("is-fading-out");
+    nextViewElement.classList.add("is-prep");
+    currentPreUefiView = nextView;
+    activePreUefiActionIndex = 0;
+    syncPreUefiSelection(0);
+    window.requestAnimationFrame(() => {
+      void nextViewElement.offsetWidth;
+      nextViewElement.classList.remove("is-prep");
+      nextViewElement.classList.add("is-fading-in");
+      window.setTimeout(() => {
+        nextViewElement.classList.remove("is-fading-in");
+        nextViewElement.classList.add("is-active");
+      }, 150);
+    });
+  }, 150);
+}
+
+function setDevicePageNavPressed(pressed) {
+  if (!devicePageBackButton) {
+    return;
+  }
+  devicePageBackButton.classList.toggle("is-pressed", pressed);
+}
+
+if (devicePageBackButton) {
+  devicePageBackButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setDevicePageNavPressed(true);
+  });
+
+  devicePageBackButton.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setDevicePageNavPressed(false);
+  });
+
+  devicePageBackButton.addEventListener("mouseleave", () => {
+    setDevicePageNavPressed(false);
+  });
+
+  devicePageBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    setDevicePageNavPressed(false);
+  });
+}
+
 function setPreUefiPressed(button, pressed) {
   if (!button) {
     return;
@@ -1107,19 +1188,24 @@ function handleKeyboardNavigation(event) {
   if (document.body.classList.contains("pre-uefi-active") && !getOpenModal()) {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
       event.preventDefault();
-      const preUefiMoves = {
-        ArrowUp: [0, 0, 1, 3],
-        ArrowDown: [1, 2, 2, 3],
-        ArrowLeft: [0, 1, 2, 0],
-        ArrowRight: [3, 3, 3, 3]
-      };
-      syncPreUefiSelection(preUefiMoves[event.key][activePreUefiActionIndex] ?? 0);
+      if (currentPreUefiView === "device") {
+        syncPreUefiSelection(0);
+      } else {
+        const preUefiMoves = {
+          ArrowUp: [0, 0, 1, 3],
+          ArrowDown: [1, 2, 2, 3],
+          ArrowLeft: [0, 1, 2, 0],
+          ArrowRight: [3, 3, 3, 3]
+        };
+        syncPreUefiSelection(preUefiMoves[event.key][activePreUefiActionIndex] ?? 0);
+      }
       return;
     }
 
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      const targetButton = preUefiActions[activePreUefiActionIndex];
+      const controls = getVisiblePreUefiControls();
+      const targetButton = controls[activePreUefiActionIndex];
       if (event.repeat || preUefiEnterPressed || !targetButton) {
         return;
       }
@@ -1820,7 +1906,7 @@ window.addEventListener("keyup", (event) => {
   ) {
     event.preventDefault();
     preUefiEnterPressed = false;
-    const targetButton = preUefiActions[activePreUefiActionIndex];
+    const targetButton = getVisiblePreUefiControls()[activePreUefiActionIndex];
     setPreUefiPressed(targetButton, false);
     targetButton?.click();
     return;
@@ -2076,7 +2162,6 @@ preUefiActions.forEach((button, index) => {
     if (event.button !== 0) {
       return;
     }
-    syncPreUefiSelection(index);
     setPreUefiPressed(button, true);
   });
 
@@ -2102,6 +2187,24 @@ if (enterUefiButton) {
       return;
     }
     enterUefiFromPreScreen();
+  });
+}
+
+if (useDeviceButton) {
+  useDeviceButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    switchPreUefiView("device");
+  });
+}
+
+if (devicePageBackButton) {
+  devicePageBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    switchPreUefiView("main");
   });
 }
 
