@@ -29,6 +29,9 @@ const authPasswordError = document.getElementById("authPasswordError");
 const passwordSetupError = document.getElementById("passwordSetupError");
 const uefiShell = document.getElementById("uefiShell");
 const restartButton = document.getElementById("restartButton");
+const preUefiScreen = document.getElementById("preUefiScreen");
+const preUefiActions = Array.from(document.querySelectorAll(".pre-uefi-action"));
+const enterUefiButton = document.getElementById("enterUefiButton");
 const modalInputs = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-input")) : [];
 const modalActions = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-action")) : [];
 const modalConfirmButton = modalActions[0] || null;
@@ -61,6 +64,8 @@ let activeAuthPasswordActionIndex = 0;
 let authPasswordEnterPressed = false;
 let authPasswordIgnoreInitialEnter = false;
 let restrictedMode = false;
+let activePreUefiActionIndex = 0;
+let preUefiEnterPressed = false;
 
 let dragCandidateItem = null;
 let draggedBootItem = null;
@@ -266,6 +271,25 @@ function syncRestrictedMode() {
   if (!getOpenModal()) {
     applyKeyboardSelection();
   }
+}
+
+function syncPreUefiSelection(index = 0) {
+  if (preUefiActions.length === 0) {
+    return;
+  }
+  activePreUefiActionIndex = Math.max(0, Math.min(index, preUefiActions.length - 1));
+  preUefiActions.forEach((button, buttonIndex) => {
+    button.classList.toggle("is-selected", buttonIndex === activePreUefiActionIndex);
+  });
+}
+
+function showPreUefiScreen() {
+  document.body.classList.add("pre-uefi-active");
+  syncPreUefiSelection(0);
+}
+
+function hidePreUefiScreen() {
+  document.body.classList.remove("pre-uefi-active");
 }
 
 function resetClientState() {
@@ -739,19 +763,28 @@ function startAuthGate() {
 function finishAuthGateReveal() {
   window.setTimeout(() => {
     document.body.classList.remove("auth-gate");
-    document.body.classList.add("auth-gate-reveal");
-    window.setTimeout(() => {
-      document.body.classList.remove("auth-gate-reveal");
-    }, 130);
+    showPreUefiScreen();
   }, 1500);
 }
 
 function finishAuthGateRevealFast() {
   document.body.classList.remove("auth-gate");
+  hidePreUefiScreen();
   document.body.classList.add("auth-gate-reveal-fast");
   window.setTimeout(() => {
     document.body.classList.remove("auth-gate-reveal-fast");
   }, 90);
+}
+
+function enterUefiFromPreScreen() {
+  finishAuthGateRevealFast();
+}
+
+function setPreUefiPressed(button, pressed) {
+  if (!button) {
+    return;
+  }
+  button.classList.toggle("is-pressed", pressed);
 }
 
 function restartIntoUefi() {
@@ -762,25 +795,11 @@ function restartIntoUefi() {
   navigationArea = "sidebar";
   sidebarKeyboardIndex = 0;
   setActivePanel("device-info", { flash: false });
-
-  if (persistedState.uefiPassword) {
-    window.setTimeout(() => {
-      openAuthPasswordDialog(false);
-    }, 1500);
-    return;
-  }
-
   finishAuthGateReveal();
 }
 
 function enterUefiOnLoad() {
   startAuthGate();
-  if (persistedState.uefiPassword) {
-    window.setTimeout(() => {
-      openAuthPasswordDialog(false);
-    }, 1500);
-    return;
-  }
   finishAuthGateReveal();
 }
 
@@ -1083,6 +1102,31 @@ function handleKeyboardNavigation(event) {
     event.preventDefault();
     resetClientState();
     return;
+  }
+
+  if (document.body.classList.contains("pre-uefi-active") && !getOpenModal()) {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
+      event.preventDefault();
+      const preUefiMoves = {
+        ArrowUp: [0, 0, 1, 3],
+        ArrowDown: [1, 2, 2, 3],
+        ArrowLeft: [0, 1, 2, 0],
+        ArrowRight: [3, 3, 3, 3]
+      };
+      syncPreUefiSelection(preUefiMoves[event.key][activePreUefiActionIndex] ?? 0);
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const targetButton = preUefiActions[activePreUefiActionIndex];
+      if (event.repeat || preUefiEnterPressed || !targetButton) {
+        return;
+      }
+      preUefiEnterPressed = true;
+      setPreUefiPressed(targetButton, true);
+      return;
+    }
   }
 
   if (getOpenModal()) {
@@ -1525,7 +1569,7 @@ function submitAuthPassword() {
     restrictedMode = false;
     syncRestrictedMode();
     closeAuthPasswordDialog();
-    finishAuthGateRevealFast();
+    enterUefiFromPreScreen();
     return true;
   }
   if (authPasswordError) {
@@ -1597,7 +1641,7 @@ window.addEventListener("keydown", (event) => {
       restrictedMode = true;
       syncRestrictedMode();
       closeAuthPasswordDialog();
-      finishAuthGateRevealFast();
+      enterUefiFromPreScreen();
       return;
     }
 
@@ -1768,6 +1812,20 @@ window.addEventListener("keydown", (event) => {
 });
 
 window.addEventListener("keyup", (event) => {
+  if (
+    document.body.classList.contains("pre-uefi-active") &&
+    !getOpenModal() &&
+    (event.key === "Enter" || event.key === " ") &&
+    preUefiEnterPressed
+  ) {
+    event.preventDefault();
+    preUefiEnterPressed = false;
+    const targetButton = preUefiActions[activePreUefiActionIndex];
+    setPreUefiPressed(targetButton, false);
+    targetButton?.click();
+    return;
+  }
+
   if (event.key !== "Enter") {
     return;
   }
@@ -2013,6 +2071,40 @@ if (restartButton) {
   });
 }
 
+preUefiActions.forEach((button, index) => {
+  button.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    syncPreUefiSelection(index);
+    setPreUefiPressed(button, true);
+  });
+
+  button.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setPreUefiPressed(button, false);
+  });
+
+  button.addEventListener("mouseleave", () => {
+    setPreUefiPressed(button, false);
+  });
+});
+
+if (enterUefiButton) {
+  enterUefiButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (persistedState.uefiPassword) {
+      openAuthPasswordDialog(false);
+      return;
+    }
+    enterUefiFromPreScreen();
+  });
+}
+
 if (authPasswordConfirmButton) {
   authPasswordConfirmButton.addEventListener("click", () => {
     submitAuthPassword();
@@ -2024,6 +2116,6 @@ if (authPasswordCancelButton) {
     restrictedMode = true;
     syncRestrictedMode();
     closeAuthPasswordDialog();
-    finishAuthGateRevealFast();
+    enterUefiFromPreScreen();
   });
 }

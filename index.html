@@ -9,6 +9,45 @@
 <body>
   <div class="viewport">
     <main class="stage" id="stage">
+      <div class="auth-gate-screen" id="authGateScreen" aria-hidden="true">
+        <img class="auth-gate-logo" src="img/logo_UEFI.png" alt="">
+      </div>
+      <div class="pre-uefi-screen" id="preUefiScreen" hidden>
+        <div class="pre-uefi-title">选择一个选项</div>
+        <div class="pre-uefi-actions">
+          <div class="pre-uefi-column">
+            <button class="pre-uefi-action is-selected" id="enterUefiButton" type="button">
+              <span class="pre-uefi-action-icon" aria-hidden="true"></span>
+              <span class="pre-uefi-action-copy">
+                <span class="pre-uefi-action-title">继续</span>
+                <span class="pre-uefi-action-subtitle">退出并继续使用 Windows</span>
+              </span>
+            </button>
+            <button class="pre-uefi-action" type="button">
+              <span class="pre-uefi-action-icon" aria-hidden="true"></span>
+              <span class="pre-uefi-action-copy">
+                <span class="pre-uefi-action-title">使用设备</span>
+                <span class="pre-uefi-action-subtitle">使用 U 盘、网络连接或 Windows 恢复 DVD</span>
+              </span>
+            </button>
+            <button class="pre-uefi-action" type="button">
+              <span class="pre-uefi-action-icon" aria-hidden="true"></span>
+              <span class="pre-uefi-action-copy">
+                <span class="pre-uefi-action-title">疑难解答</span>
+                <span class="pre-uefi-action-subtitle">重置你的电脑或查看高级选项</span>
+              </span>
+            </button>
+          </div>
+          <div class="pre-uefi-column pre-uefi-column-side">
+            <button class="pre-uefi-action pre-uefi-action-compact" type="button">
+              <span class="pre-uefi-action-icon" aria-hidden="true"></span>
+              <span class="pre-uefi-action-copy">
+                <span class="pre-uefi-action-title">关闭电脑</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </div>
       <div class="uefi-shell" id="uefiShell">
       <header class="topbar">
         <div class="topbar-title">Aether UEFI</div>
