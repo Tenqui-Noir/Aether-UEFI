@@ -3,7 +3,6 @@ const DESIGN_HEIGHT = 1080;
 const STORAGE_KEY = "aether-uefi-state";
 
 const stage = document.getElementById("stage");
-const screenFlashOverlay = document.getElementById("screenFlashOverlay");
 const panelArea = document.querySelector(".panel-area");
 const sidebarItems = Array.from(document.querySelectorAll(".sidebar-item"));
 const panels = Array.from(document.querySelectorAll(".panel"));
@@ -413,20 +412,27 @@ function flashPanelAreaOnModalClose() {
 }
 
 function flashSidebarSwitch() {
-  if (!screenFlashOverlay) {
+  if (!panelArea) {
     return;
   }
 
   const modes = ["full", "half-top", "half-bottom"];
   const mode = modes[Math.floor(Math.random() * modes.length)];
-  screenFlashOverlay.className = "screen-flash-overlay";
-  if (mode !== "full") {
-    screenFlashOverlay.classList.add(mode);
+  let overlay = panelArea.querySelector(".screen-flash-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "screen-flash-overlay";
+    panelArea.appendChild(overlay);
   }
-  screenFlashOverlay.hidden = false;
+
+  overlay.className = "screen-flash-overlay";
+  if (mode !== "full") {
+    overlay.classList.add(mode);
+  }
+  overlay.hidden = false;
   window.setTimeout(() => {
-    screenFlashOverlay.hidden = true;
-    screenFlashOverlay.className = "screen-flash-overlay";
+    overlay.hidden = true;
+    overlay.className = "screen-flash-overlay";
   }, 10);
 }
 
@@ -1212,6 +1218,9 @@ document.querySelectorAll("button, input").forEach((element) => {
 sidebarItems.forEach((item) => {
   item.addEventListener("click", (event) => {
     if (event.button !== 0) {
+      return;
+    }
+    if (item.classList.contains("active")) {
       return;
     }
     setActivePanel(item.dataset.panel);

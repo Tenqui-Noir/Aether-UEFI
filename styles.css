@@ -160,6 +160,7 @@ body.keyboard-mode.sidebar-focus .sidebar-item.keyboard-selected::after {
   height: 980px;
   padding: 30px 48px;
   background: #ffffff;
+  position: relative;
 }
 
 .panel-area.flashing {
