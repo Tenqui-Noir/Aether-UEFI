@@ -5,8 +5,8 @@ export function createStartupFlow({
   syncPreUefiSelection
 }) {
   function showPreUefiScreen() {
-    const waitAppearDelay = 300;
-    const waitHoldDelay = 600;
+    const waitAppearDelay = 1000;
+    const waitHoldDelay = 4000;
     const authFadeDuration = 300;
     const blackHoldDelay = 300;
     const preUefiFadeDuration = 200;

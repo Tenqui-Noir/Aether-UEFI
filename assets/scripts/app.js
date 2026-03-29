@@ -6,6 +6,7 @@ const STORAGE_KEY = "aether-uefi-state";
 
 const stage = document.getElementById("stage");
 const panelArea = document.querySelector(".panel-area");
+const authGateLoader = document.querySelector(".auth-gate-loader");
 const sidebarItems = Array.from(document.querySelectorAll(".sidebar-item"));
 const panels = Array.from(document.querySelectorAll(".panel"));
 const toggleButtons = Array.from(document.querySelectorAll(".toggle-button"));
@@ -38,6 +39,7 @@ const devicePageView = document.getElementById("devicePageView");
 const preUefiActions = Array.from(document.querySelectorAll(".pre-uefi-interactive"));
 const enterUefiButton = document.getElementById("enterUefiButton");
 const useDeviceButton = document.getElementById("useDeviceButton");
+const powerOffButton = document.getElementById("powerOffButton");
 const devicePageBackButton = document.getElementById("devicePageBackButton");
 const modalInputs = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-input")) : [];
 const modalActions = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-action")) : [];
@@ -53,6 +55,10 @@ const deleteBootCancelButton = deleteBootActions[1] || null;
 const authPasswordActions = Array.from(document.querySelectorAll(".auth-password-action"));
 const authPasswordConfirmButton = authPasswordActions[0] || null;
 const authPasswordCancelButton = authPasswordActions[1] || null;
+const AUTH_GATE_LOADER_FRAMES = Array.from(
+  ""
+);
+let authGateLoaderFrameIndex = 0;
 
 let activeModalInputIndex = 0;
 let activeModalActionIndex = 0;
@@ -323,8 +329,9 @@ function syncPreUefiSelection(index = 0) {
 }
 
 function showPreUefiScreen() {
-  const waitAppearDelay = 300;
-  const waitHoldDelay = 600;
+  const waitAppearDelay = 1000;
+  const loaderAppearDelay = 1000;
+  const waitHoldDelay = 3000;
   const authFadeDuration = 300;
   const blackHoldDelay = 300;
   const preUefiFadeDuration = 300;
@@ -335,6 +342,7 @@ function showPreUefiScreen() {
   devicePageView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");
   document.body.classList.remove(
     "auth-gate-show-wait",
+    "auth-gate-show-loader",
     "auth-gate-fading-out",
     "auth-gate-blackhold",
     "pre-uefi-active",
@@ -345,10 +353,18 @@ function showPreUefiScreen() {
     document.body.classList.add("auth-gate-show-wait");
 
     window.setTimeout(() => {
+      authGateLoaderFrameIndex = 0;
+      if (authGateLoader) {
+        authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0] || "";
+      }
+      document.body.classList.add("auth-gate-show-loader");
+
+      window.setTimeout(() => {
       document.body.classList.add("auth-gate-fading-out");
 
       window.setTimeout(() => {
         document.body.classList.remove("auth-gate-show-wait");
+        document.body.classList.remove("auth-gate-show-loader");
         document.body.classList.remove("auth-gate");
         document.body.classList.remove("auth-gate-fading-out");
         document.body.classList.add("auth-gate-blackhold");
@@ -381,14 +397,16 @@ function showPreUefiScreen() {
           });
         }, blackHoldDelay);
       }, authFadeDuration);
-    }, waitHoldDelay);
+      }, waitHoldDelay);
+    }, loaderAppearDelay);
   }, waitAppearDelay);
 }
 
 function hidePreUefiScreen() {
   document.body.classList.remove("pre-uefi-active");
   document.body.classList.remove("pre-uefi-fading-in");
-  document.body.classList.remove("auth-gate-show-wait", "auth-gate-fading-out", "auth-gate-blackhold");
+  document.body.classList.remove("pre-uefi-fading-out");
+  document.body.classList.remove("auth-gate-show-wait", "auth-gate-show-loader", "auth-gate-fading-out", "auth-gate-blackhold");
 }
 
 function getVisiblePreUefiControls() {
@@ -869,6 +887,7 @@ function startAuthGate() {
     "auth-gate-reveal",
     "auth-gate-reveal-fast",
     "auth-gate-show-wait",
+    "auth-gate-show-loader",
     "auth-gate-fading-out",
     "auth-gate-blackhold",
     "pre-uefi-active",
@@ -882,6 +901,7 @@ function finishAuthGateReveal() {
 
 function finishAuthGateRevealFast() {
   document.body.classList.remove("auth-gate");
+  document.body.classList.remove("auth-gate-blackhold");
   hidePreUefiScreen();
   document.body.classList.add("auth-gate-reveal-fast");
   window.setTimeout(() => {
@@ -891,6 +911,41 @@ function finishAuthGateRevealFast() {
 
 function enterUefiFromPreScreen() {
   finishAuthGateRevealFast();
+}
+
+function continueToUefiFromPreScreen() {
+  if (preUefiInteractionLocked) {
+    return;
+  }
+
+  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
+  lockPreUefiInteraction(3000);
+  currentViewElement?.classList.remove("is-active", "is-fading-in");
+  currentViewElement?.classList.add("is-fading-out");
+  document.body.classList.add("pre-uefi-fading-out");
+
+  window.setTimeout(() => {
+    currentViewElement?.classList.remove("is-fading-out");
+    document.body.classList.remove("pre-uefi-active", "pre-uefi-fading-in", "pre-uefi-fading-out");
+    document.body.classList.add("auth-gate-blackhold");
+
+    window.setTimeout(() => {
+      document.body.classList.remove("auth-gate-blackhold");
+      startAuthGate();
+
+      window.setTimeout(() => {
+        document.body.classList.remove("auth-gate");
+        document.body.classList.add("auth-gate-blackhold");
+
+        if (persistedState.uefiPassword) {
+          openAuthPasswordDialog(false);
+          return;
+        }
+
+        finishAuthGateRevealFast();
+      }, 400);
+    }, 2000);
+  }, 200);
 }
 
 function switchPreUefiView(nextView) {
@@ -968,14 +1023,42 @@ function setPreUefiPressed(button, pressed) {
 }
 
 function restartIntoUefi() {
+  const isInsidePreUefi = document.body.classList.contains("pre-uefi-active");
+  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
+
   restrictedMode = false;
   syncRestrictedMode();
-  startAuthGate();
   clearKeyboardSelection();
   navigationArea = "sidebar";
   sidebarKeyboardIndex = 0;
   setActivePanel("device-info", { flash: false });
-  finishAuthGateReveal();
+
+  const beginBlackHold = () => {
+    hidePreUefiScreen();
+    document.body.classList.remove("auth-gate");
+    document.body.classList.remove("auth-gate-reveal", "auth-gate-reveal-fast");
+    document.body.classList.add("auth-gate-blackhold");
+    window.setTimeout(() => {
+      document.body.classList.remove("auth-gate-blackhold");
+      startAuthGate();
+      finishAuthGateReveal();
+    }, 2000);
+  };
+
+  if (isInsidePreUefi) {
+    lockPreUefiInteraction(2200);
+    currentViewElement?.classList.remove("is-active", "is-fading-in");
+    currentViewElement?.classList.add("is-fading-out");
+    document.body.classList.add("pre-uefi-fading-out");
+    window.setTimeout(() => {
+      currentViewElement?.classList.remove("is-fading-out");
+      document.body.classList.remove("pre-uefi-fading-out");
+      beginBlackHold();
+    }, 200);
+    return;
+  }
+
+  beginBlackHold();
 }
 
 function enterUefiOnLoad() {
@@ -1426,6 +1509,14 @@ applyPersistedState();
 updateCurrentDateTime();
 applyKeyboardSelection();
 enterUefiOnLoad();
+
+if (authGateLoader && AUTH_GATE_LOADER_FRAMES.length > 0) {
+  authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0];
+  window.setInterval(() => {
+    authGateLoaderFrameIndex = (authGateLoaderFrameIndex + 1) % AUTH_GATE_LOADER_FRAMES.length;
+    authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[authGateLoaderFrameIndex];
+  }, 32);
+}
 
 window.addEventListener("resize", resizeStage);
 window.setInterval(updateCurrentDateTime, 1000);
@@ -2302,12 +2393,7 @@ if (enterUefiButton) {
     if (preUefiInteractionLocked) {
       return;
     }
-    lockPreUefiInteraction(400);
-    if (persistedState.uefiPassword) {
-      openAuthPasswordDialog(false);
-      return;
-    }
-    enterUefiFromPreScreen();
+    continueToUefiFromPreScreen();
   });
 }
 
@@ -2320,6 +2406,18 @@ if (useDeviceButton) {
       return;
     }
     switchPreUefiView("device");
+  });
+}
+
+if (powerOffButton) {
+  powerOffButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    restartIntoUefi();
   });
 }
 

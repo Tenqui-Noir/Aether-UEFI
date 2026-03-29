@@ -10,6 +10,15 @@
   --toggle-on-color: #0078d7;
 }
 
+@font-face {
+  font-family: "SegoeN SL Boot";
+  src:
+    local("segoen_slboot"),
+    local("Segoe Boot Semilight"),
+    local("SegoeN SL Boot"),
+    url("../../assets/fonts/segoen_slboot.ttf") format("truetype");
+}
+
 * {
   box-sizing: border-box;
   user-select: none;
@@ -82,13 +91,28 @@ body {
   display: block;
   object-fit: fill;
   margin-top: 0;
-  transform: translateY(0);
+  transform: translateY(-36px);
+}
+
+.auth-gate-loader {
+  position: absolute;
+  left: 50%;
+  top: calc(90% - 54px);
+  transform: translate(-50%, -50%) scaleX(1.18) scaleY(0.88);
+  font-family: "SegoeN SL Boot", "Segoe MDL2 Assets", "Segoe Fluent Icons", sans-serif;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0;
+  font-stretch: normal;
+  white-space: nowrap;
+  color: #ffffff;
+  opacity: 0;
 }
 
 .auth-gate-wait {
   position: absolute;
   left: 50%;
-  top: 75%;
+  top: 90%;
   transform: translate(-50%, -50%);
   font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 28px;
@@ -99,6 +123,10 @@ body {
 }
 
 body.auth-gate-show-wait .auth-gate-wait {
+  opacity: 1;
+}
+
+body.auth-gate-show-loader .auth-gate-loader {
   opacity: 1;
 }
 
@@ -219,8 +247,8 @@ body.auth-gate-fading-out .auth-gate-content {
 }
 
 .pre-uefi-icon-svg {
-  width: 64px;
-  height: 64px;
+  width: 76px;
+  height: 76px;
   color: #ffffff;
   fill: currentColor;
 }
@@ -348,6 +376,12 @@ body.pre-uefi-active .pre-uefi-screen {
 body.pre-uefi-fading-in .pre-uefi-screen {
   display: block;
   opacity: 1;
+  transition: opacity 200ms linear;
+}
+
+body.pre-uefi-fading-out .pre-uefi-screen {
+  display: block;
+  opacity: 0;
   transition: opacity 200ms linear;
 }
 

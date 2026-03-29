@@ -12,6 +12,7 @@
       <div class="auth-gate-screen" id="authGateScreen" aria-hidden="true">
         <div class="auth-gate-content">
           <img class="auth-gate-logo" src="img/logo_UEFI.png" alt="">
+          <div class="auth-gate-loader" aria-hidden="true"></div>
           <div class="auth-gate-wait">请稍后</div>
         </div>
       </div>
@@ -29,7 +30,7 @@
                 </span>
                 <span class="pre-uefi-action-copy">
                   <span class="pre-uefi-action-title">继续</span>
-                  <span class="pre-uefi-action-subtitle">退出并继续使用现有操作系统</span>
+                  <span class="pre-uefi-action-subtitle">退出并继续使用 Windows</span>
                 </span>
               </button>
 
@@ -59,14 +60,14 @@
             </div>
 
             <div class="pre-uefi-column pre-uefi-column-side">
-              <button class="pre-uefi-action pre-uefi-action-compact pre-uefi-interactive" type="button">
+              <button class="pre-uefi-action pre-uefi-action-compact pre-uefi-interactive" id="powerOffButton" type="button">
                 <span class="pre-uefi-action-icon" aria-hidden="true">
                   <svg class="pre-uefi-icon-svg" viewBox="0 0 64 64" aria-hidden="true">
                     <path fill="currentColor" d="M33.6 8a1.6 1.6 0 0 0-3.2 0v19.2a1.6 1.6 0 0 0 3.2 0zm10.345 4.8a1.6 1.6 0 1 0-1.598 2.775A20.8 20.8 0 1 1 21.56 15.59a1.6 1.6 0 1 0-1.6-2.771a24 24 0 1 0 23.985-.02"/>
                   </svg>
                 </span>
                 <span class="pre-uefi-action-copy">
-                  <span class="pre-uefi-action-title">关闭电脑</span>
+                  <span class="pre-uefi-action-title">重启电脑</span>
                 </span>
               </button>
             </div>
