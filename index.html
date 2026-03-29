@@ -9,6 +9,7 @@
 <body>
   <div class="viewport">
     <main class="stage" id="stage">
+      <div class="uefi-shell" id="uefiShell">
       <header class="topbar">
         <div class="topbar-title">Aether UEFI</div>
       </header>
@@ -67,8 +68,8 @@
             <div class="security-section-gap"></div>
             <h1 class="panel-title">安全启动</h1>
             <div class="panel-spacer"></div>
-            <div class="security-copy">
-              安全启动已启用，使用 Microsoft 和第三方 CA 密钥配置
+            <div class="security-copy" id="secureBootSummary">
+              安全启动已启用，使用 Microsoft 和第三方 CA 密钥集配置
             </div>
             <div class="security-button-wrap">
               <button class="security-button" type="button">更改配置</button>
@@ -87,14 +88,14 @@
           </section>
 
           <section class="panel" data-panel-content="boot">
-            <div class="boot-flash-group">
+            <div class="boot-flash-group boot-config-section" id="bootConfigSection">
               <h1 class="panel-title">配置启动设备顺序</h1>
               <div class="panel-spacer"></div>
               <div class="security-copy boot-copy">
                 要更改搜索可启动操作系统时各设备的顺序，请将每个启动选项拖动到列表中的目标位置。使用复选框可启用或禁用某个启动选项。点击垃圾桶图标可从列表中永久移除某个启动选项。在设备上向左滑动可立即从该设备启动。
               </div>
-              <div class="boot-list-wrap">
-                <div class="boot-list">
+              <div class="boot-list-wrap boot-config-list-wrap" id="bootConfigListWrap">
+                <div class="boot-list" id="bootConfigList">
                   <button class="boot-item active" type="button" data-boot-id="windows-boot-manager">
                     <span class="boot-check checked" aria-hidden="true"></span>
                     <span class="boot-label">Windows Boot Manager</span>
@@ -132,14 +133,14 @@
                 </div>
               </div>
               <div class="boot-advanced-item boot-flash-group">
-                <div class="security-copy">为 PXE 网络启动选项启用 IPv6</div>
+                <div class="security-copy">远程唤醒（WoL）</div>
                 <div class="toggle-control">
                   <button class="toggle-button off boot-toggle" type="button" aria-label="PXE 网络启动 IPv6 已关闭" data-toggle-key="pxe-ipv6"></button>
                   <div class="toggle-text">关</div>
                 </div>
               </div>
               <div class="boot-advanced-item boot-flash-group">
-                <div class="security-copy">启用从 USB 设备启动</div>
+                <div class="security-copy">从 USB 设备启动</div>
                 <div class="toggle-control">
                   <button class="toggle-button boot-toggle" type="button" aria-label="从 USB 设备启动已开启" data-toggle-key="boot-from-usb"></button>
                   <div class="toggle-text">开</div>
@@ -232,6 +233,78 @@
           </section>
         </section>
       </div>
+      </div>
+  <div class="modal-overlay" id="passwordDialog" hidden>
+    <div class="modal-frame">
+      <div class="modal-titlebar">输入密码</div>
+      <div class="modal-body">
+        <h1 class="modal-heading">输入系统密码</h1>
+        <div class="modal-copy">
+          密码可以包含字母、数字以及特殊字符的组合，包括：[@#5%^&*0 ?&lt; &gt;0)0 -= +|"-"]。密码长度最短为 6 个字符，最长为 128 个字符。如果留空系统将删除原有的密码。此后，用户无需输入密码即可直接进入 Aether UEFI 设置界面。
+        </div>
+        <div class="modal-inputs">
+          <input class="modal-input is-active" type="password" spellcheck="false" autocomplete="off" placeholder="新密码">
+          <input class="modal-input" type="password" spellcheck="false" autocomplete="off" placeholder="确认密码">
+        </div>
+        <div class="modal-error" id="passwordSetupError" hidden>密码未满足要求。</div>
+        <div class="modal-actions">
+          <button class="modal-action" type="button">确认</button>
+          <button class="modal-action" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="secureBootDialog" hidden>
+    <div class="modal-frame">
+      <div class="modal-titlebar">安全启动配置</div>
+      <div class="modal-body">
+        <h1 class="modal-heading">更改安全启动配置</h1>
+        <div class="modal-copy">请选择安全启动证书密钥集</div>
+        <div class="modal-option-list">
+          <button class="modal-option-item is-active" type="button" data-secure-boot-option="microsoft-only">仅 Microsoft</button>
+          <button class="modal-option-item" type="button" data-secure-boot-option="microsoft-third-party">Microsoft 和第三方 CA</button>
+          <button class="modal-option-item" type="button" data-secure-boot-option="disabled">无</button>
+        </div>
+        <div class="modal-actions">
+          <button class="modal-action secure-boot-action is-selected" type="button">确认</button>
+          <button class="modal-action secure-boot-action" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="deleteBootDialog" hidden>
+    <div class="modal-frame">
+      <div class="modal-titlebar">删除选项</div>
+      <div class="modal-body">
+        <h1 class="modal-heading">删除启动项</h1>
+        <div class="modal-copy">以下启动项将从设备中永久删除：</div>
+        <div class="modal-delete-name" id="deleteBootName">Windows Boot Manager</div>
+        <div class="modal-actions">
+          <button class="modal-action delete-boot-action is-selected" type="button">确认</button>
+          <button class="modal-action delete-boot-action" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-overlay" id="authPasswordDialog" hidden>
+    <div class="modal-frame">
+      <div class="modal-titlebar">输入密码</div>
+      <div class="modal-body">
+        <h1 class="modal-heading">输入系统密码</h1>
+        <div class="modal-copy">
+          Aether UEFI 由密码保护。输入密码以管理员身份继续设置，或点击“取消”以受限模式进入。
+        </div>
+        <div class="modal-inputs">
+          <input class="modal-input auth-password-input is-active" type="password" spellcheck="false" autocomplete="off" placeholder="密码">
+        </div>
+        <div class="modal-error" id="authPasswordError" hidden>密码不正确</div>
+        <div class="modal-actions">
+          <button class="modal-action auth-password-action is-selected" type="button">确认</button>
+          <button class="modal-action auth-password-action" type="button">取消</button>
+        </div>
+      </div>
+    </div>
+  </div>
     </main>
   </div>
 
