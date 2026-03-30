@@ -1,64 +1,87 @@
-import { clearJsonState, loadJsonState, saveJsonState } from "./storage.js";
+import { createDomRefs } from "./core/dom.js";
+import { STORAGE_KEY, getDefaultState, getSecureBootSummaryText } from "./core/state.js";
+import { clearJsonState, loadJsonState, saveJsonState } from "./core/storage.js";
+import { formatDateTime, normalizeDateTimeInput, parseDateTimeInput } from "./features/date-time.js";
+import { createStartupFlow } from "./features/startup-flow.js";
 
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
-const STORAGE_KEY = "aether-uefi-state";
-
-const stage = document.getElementById("stage");
-const panelArea = document.querySelector(".panel-area");
-const authGateLoader = document.querySelector(".auth-gate-loader");
-const sidebarItems = Array.from(document.querySelectorAll(".sidebar-item"));
-const panels = Array.from(document.querySelectorAll(".panel"));
-const toggleButtons = Array.from(document.querySelectorAll(".toggle-button"));
-const bootToggleButtons = Array.from(document.querySelectorAll(".boot-toggle"));
-const bootItems = Array.from(document.querySelectorAll(".boot-item"));
-const bootChecks = Array.from(document.querySelectorAll(".boot-check"));
-const bootFlashGroups = Array.from(document.querySelectorAll('[data-panel-content="boot"] .boot-flash-group'));
-const bootList = document.querySelector(".boot-list");
-const bootConfigSection = document.getElementById("bootConfigSection");
-const bootConfigListWrap = document.getElementById("bootConfigListWrap");
-const dateTimeInput = document.getElementById("dateTimeInput");
-const currentDateTimeValue = document.getElementById("currentDateTimeValue");
-const secureBootSummary = document.getElementById("secureBootSummary");
-const secureBootSection = document.getElementById("secureBootSection");
-const passwordDialog = document.getElementById("passwordDialog");
-const passwordDialogOpen = document.querySelector('[data-panel-content="security"] .security-button');
-const secureBootDialog = document.getElementById("secureBootDialog");
-const secureBootDialogOpen = document.querySelectorAll('[data-panel-content="security"] .security-button')[1] || null;
-const deleteBootDialog = document.getElementById("deleteBootDialog");
-const deleteBootName = document.getElementById("deleteBootName");
-const authPasswordDialog = document.getElementById("authPasswordDialog");
-const authPasswordInput = document.querySelector(".auth-password-input");
-const authPasswordError = document.getElementById("authPasswordError");
-const passwordSetupError = document.getElementById("passwordSetupError");
-const uefiShell = document.getElementById("uefiShell");
-const restartButton = document.getElementById("restartButton");
-const preUefiScreen = document.getElementById("preUefiScreen");
-const preUefiMainView = document.getElementById("preUefiMainView");
-const devicePageView = document.getElementById("devicePageView");
-const preUefiActions = Array.from(document.querySelectorAll(".pre-uefi-interactive"));
-const enterUefiButton = document.getElementById("enterUefiButton");
-const useDeviceButton = document.getElementById("useDeviceButton");
-const powerOffButton = document.getElementById("powerOffButton");
-const devicePageBackButton = document.getElementById("devicePageBackButton");
-const modalInputs = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-input")) : [];
-const modalActions = passwordDialog ? Array.from(passwordDialog.querySelectorAll(".modal-action")) : [];
+const {
+  stage,
+  panelArea,
+  authGateLoader,
+  sidebarItems,
+  panels,
+  toggleButtons,
+  bootToggleButtons,
+  bootItems,
+  bootChecks,
+  bootFlashGroups,
+  bootList,
+  bootConfigSection,
+  bootConfigListWrap,
+  dateTimeInput,
+  currentDateTimeValue,
+  deviceInfoBootMode,
+  deviceInfoSecureBoot,
+  secureBootSummary,
+  secureBootSection,
+  passwordDialog,
+  passwordDialogOpen,
+  secureBootDialog,
+  secureBootDialogOpen,
+  deleteBootDialog,
+  deleteBootName,
+  authPasswordDialog,
+  authPasswordInput,
+  authPasswordError,
+  passwordSetupError,
+  uefiShell,
+  restartButton,
+  preUefiScreen,
+  preUefiMainView,
+  devicePageView,
+  troubleshootPageView,
+  startupSettingsPageView,
+  commandPromptPageView,
+  systemImageRecoveryPageView,
+  preUefiActions,
+  enterUefiButton,
+  useDeviceButton,
+  troubleshootButton,
+  startupSettingsButton,
+  commandPromptButton,
+  uefiFirmwareSettingsButton,
+  systemImageRecoveryButton,
+  powerOffButton,
+  devicePageBackButton,
+  troubleshootPageBackButton,
+  startupSettingsBackButton,
+  startupSettingsRestartButton,
+  commandPromptBackButton,
+  commandPromptConfirmButton,
+  systemImageRecoveryBackButton,
+  systemImageRecoveryConfirmButton,
+  modalInputs,
+  modalActions,
+  secureBootOptions,
+  secureBootActions,
+  deleteBootActions,
+  authPasswordActions
+} = createDomRefs(document);
 const modalConfirmButton = modalActions[0] || null;
 const modalCancelButton = modalActions[1] || null;
-const secureBootOptions = Array.from(document.querySelectorAll(".modal-option-item"));
-const secureBootActions = Array.from(document.querySelectorAll(".secure-boot-action"));
 const secureBootConfirmButton = secureBootActions[0] || null;
 const secureBootCancelButton = secureBootActions[1] || null;
-const deleteBootActions = Array.from(document.querySelectorAll(".delete-boot-action"));
 const deleteBootConfirmButton = deleteBootActions[0] || null;
 const deleteBootCancelButton = deleteBootActions[1] || null;
-const authPasswordActions = Array.from(document.querySelectorAll(".auth-password-action"));
 const authPasswordConfirmButton = authPasswordActions[0] || null;
 const authPasswordCancelButton = authPasswordActions[1] || null;
 const AUTH_GATE_LOADER_FRAMES = Array.from(
   ""
 );
 let authGateLoaderFrameIndex = 0;
+let authGateLoaderTimer = null;
 
 let activeModalInputIndex = 0;
 let activeModalActionIndex = 0;
@@ -115,6 +138,24 @@ function syncSidebarFocusMode() {
   );
 }
 
+function getSidebarIndex(panelKey) {
+  return Math.max(
+    0,
+    sidebarItems.findIndex((button) => button.dataset.panel === panelKey)
+  );
+}
+
+function resetSidebarKeyboardAnchor() {
+  sidebarKeyboardIndex = getSidebarIndex("security");
+}
+
+function getActiveSidebarIndex() {
+  return Math.max(
+    0,
+    sidebarItems.findIndex((button) => button.classList.contains("active"))
+  );
+}
+
 function resizeStage() {
   const scale = Math.min(
     window.innerWidth / DESIGN_WIDTH,
@@ -124,115 +165,6 @@ function resizeStage() {
   const offsetY = (window.innerHeight - DESIGN_HEIGHT * scale) / 2;
 
   stage.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
-}
-
-function formatDateTime(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const seconds = String(date.getSeconds()).padStart(2, "0");
-  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-}
-
-function normalizeDateTimeInput(value) {
-  const fullwidthMap = {
-    "／": "/",
-    "：": ":",
-    "　": " "
-  };
-
-  let normalized = "";
-  for (const char of value) {
-    if (char >= "０" && char <= "９") {
-      normalized += String.fromCharCode(char.charCodeAt(0) - 65248);
-      continue;
-    }
-    normalized += fullwidthMap[char] || char;
-  }
-
-  return normalized.replace(/[^0-9/: ]/g, "");
-}
-
-function parseDateTimeInput(rawValue, baseDate) {
-  const value = normalizeDateTimeInput(rawValue).trim().replace(/\s+/g, " ");
-  if (!value) {
-    return null;
-  }
-
-  const firstSpaceIndex = value.indexOf(" ");
-  const datePart = firstSpaceIndex === -1 ? value : value.slice(0, firstSpaceIndex);
-  const timePart = firstSpaceIndex === -1 ? "" : value.slice(firstSpaceIndex + 1).trim();
-
-  const dateFields = datePart.split("/");
-  if (dateFields.length < 1 || dateFields.length > 3) {
-    return null;
-  }
-
-  if (!/^\d{4}$/.test(dateFields[0])) {
-    return null;
-  }
-
-  if (dateFields.slice(1).some((field) => !/^\d{1,2}$/.test(field))) {
-    return null;
-  }
-
-  const result = new Date(baseDate.getTime());
-  const year = Number(dateFields[0]);
-  const month = dateFields[1] === undefined ? result.getMonth() + 1 : Number(dateFields[1]);
-  const day = dateFields[2] === undefined ? result.getDate() : Number(dateFields[2]);
-
-  if (month < 1 || month > 12) {
-    return null;
-  }
-
-  result.setFullYear(year, month - 1, 1);
-  const maxDay = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
-  if (day < 1 || day > maxDay) {
-    return null;
-  }
-
-  let timeFields = [];
-  if (timePart) {
-    timeFields = timePart.replace(/:/g, " ").split(" ").filter(Boolean);
-    if (timeFields.length < 1 || timeFields.length > 3) {
-      return null;
-    }
-
-    if (timeFields.some((field) => !/^\d{1,2}$/.test(field))) {
-      return null;
-    }
-  }
-
-  const hours = timeFields[0] === undefined ? result.getHours() : Number(timeFields[0]);
-  const minutes = timeFields[1] === undefined ? result.getMinutes() : Number(timeFields[1]);
-  const seconds = timeFields[2] === undefined ? result.getSeconds() : Number(timeFields[2]);
-
-  if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59 || seconds < 0 || seconds > 59) {
-    return null;
-  }
-
-  result.setFullYear(year, month - 1, day);
-  result.setHours(hours, minutes, seconds, 0);
-  return result;
-}
-
-function getDefaultState() {
-  return {
-    toggles: {},
-    secureBootOption: "microsoft-third-party",
-    uefiPassword: "",
-    bootDeleted: [],
-    bootOrder: bootItems.map((item) => item.dataset.bootId),
-    bootChecked: bootItems.reduce((result, item) => {
-      const check = item.querySelector(".boot-check");
-      result[item.dataset.bootId] = Boolean(check?.classList.contains("checked"));
-      return result;
-    }, {}),
-    bootHighlight: bootItems[0]?.dataset.bootId || null,
-    dateTimeOffsetMs: 0
-  };
 }
 
 function getCurrentBootItems() {
@@ -283,16 +215,33 @@ function isCsmEnabled() {
   return Boolean(persistedState.toggles["csm-support"]);
 }
 
+function isSecureBootEnabled() {
+  return persistedState.secureBootOption !== "disabled";
+}
+
+function syncDeviceInfoSummary() {
+  if (deviceInfoSecureBoot) {
+    deviceInfoSecureBoot.textContent = isSecureBootEnabled() ? "已启用" : "已禁用";
+  }
+  if (deviceInfoBootMode) {
+    deviceInfoBootMode.textContent = isCsmEnabled() ? "UEFI + Legacy" : "UEFI Native";
+  }
+}
+
 function syncSecurityDependencies() {
   const secureBootDisabled = isCsmEnabled();
   if (secureBootDisabled) {
+    if (persistedState.secureBootOption !== "disabled") {
+      persistedState.lastSecureBootOption = persistedState.secureBootOption;
+    }
     persistedState.secureBootOption = "disabled";
   } else if (persistedState.secureBootOption === "disabled") {
-    persistedState.secureBootOption = "microsoft-only";
+    persistedState.secureBootOption = persistedState.lastSecureBootOption || "microsoft-only";
   }
 
   saveState();
 
+  syncDeviceInfoSummary();
   applySecureBootSummary(persistedState.secureBootOption);
   secureBootSection?.classList.toggle("is-disabled", secureBootDisabled);
   secureBootDialogOpen?.classList.toggle("is-disabled", secureBootDisabled);
@@ -328,106 +277,38 @@ function syncPreUefiSelection(index = 0) {
   });
 }
 
-function showPreUefiScreen() {
-  const waitAppearDelay = 1000;
-  const loaderAppearDelay = 1000;
-  const waitHoldDelay = 3000;
-  const authFadeDuration = 300;
-  const blackHoldDelay = 300;
-  const preUefiFadeDuration = 300;
-  const menuDelay = 1000;
-
-  currentPreUefiView = "main";
-  preUefiMainView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");
-  devicePageView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");
-  document.body.classList.remove(
-    "auth-gate-show-wait",
-    "auth-gate-show-loader",
-    "auth-gate-fading-out",
-    "auth-gate-blackhold",
-    "pre-uefi-active",
-    "pre-uefi-fading-in"
-  );
-
-  window.setTimeout(() => {
-    document.body.classList.add("auth-gate-show-wait");
-
-    window.setTimeout(() => {
-      authGateLoaderFrameIndex = 0;
-      if (authGateLoader) {
-        authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0] || "";
-      }
-      document.body.classList.add("auth-gate-show-loader");
-
-      window.setTimeout(() => {
-      document.body.classList.add("auth-gate-fading-out");
-
-      window.setTimeout(() => {
-        document.body.classList.remove("auth-gate-show-wait");
-        document.body.classList.remove("auth-gate-show-loader");
-        document.body.classList.remove("auth-gate");
-        document.body.classList.remove("auth-gate-fading-out");
-        document.body.classList.add("auth-gate-blackhold");
-
-        window.setTimeout(() => {
-          document.body.classList.remove("auth-gate-blackhold");
-          document.body.classList.add("pre-uefi-active");
-
-          window.requestAnimationFrame(() => {
-            void preUefiScreen?.offsetWidth;
-            document.body.classList.add("pre-uefi-fading-in");
-
-            window.setTimeout(() => {
-              window.setTimeout(() => {
-                preUefiMainView?.classList.add("is-prep");
-                syncPreUefiSelection(0);
-
-                window.requestAnimationFrame(() => {
-                  void preUefiMainView?.offsetWidth;
-                  preUefiMainView?.classList.remove("is-prep");
-                  preUefiMainView?.classList.add("is-fading-in");
-
-                  window.setTimeout(() => {
-                    preUefiMainView?.classList.remove("is-fading-in");
-                    preUefiMainView?.classList.add("is-active");
-                  }, preUefiFadeDuration);
-                });
-              }, menuDelay);
-            }, preUefiFadeDuration);
-          });
-        }, blackHoldDelay);
-      }, authFadeDuration);
-      }, waitHoldDelay);
-    }, loaderAppearDelay);
-  }, waitAppearDelay);
-}
-
-function hidePreUefiScreen() {
-  document.body.classList.remove("pre-uefi-active");
-  document.body.classList.remove("pre-uefi-fading-in");
-  document.body.classList.remove("pre-uefi-fading-out");
-  document.body.classList.remove("auth-gate-show-wait", "auth-gate-show-loader", "auth-gate-fading-out", "auth-gate-blackhold");
-}
-
-function getVisiblePreUefiControls() {
-  if (currentPreUefiView === "device") {
-    return Array.from(document.querySelectorAll("#devicePageView .pre-uefi-interactive"));
+const startupFlow = createStartupFlow({
+  authGateLoader,
+  authGateLoaderFrames: AUTH_GATE_LOADER_FRAMES,
+  startAuthGateLoaderAnimation,
+  stopAuthGateLoaderAnimation,
+  preUefiScreen,
+  preUefiMainView,
+  devicePageView,
+  troubleshootPageView,
+  startupSettingsPageView,
+  commandPromptPageView,
+  systemImageRecoveryPageView,
+  syncPreUefiSelection,
+  getInitialPreUefiSelection: () => 0,
+  getCurrentPreUefiView: () => currentPreUefiView,
+  setCurrentPreUefiView: (value) => {
+    currentPreUefiView = value;
   }
-  return Array.from(document.querySelectorAll("#preUefiMainView .pre-uefi-interactive"));
-}
+});
+
+const {
+  finishAuthGateReveal,
+  finishAuthGateRevealFast,
+  getVisiblePreUefiControls,
+  hidePreUefiScreen,
+  showPreUefiScreen,
+  startAuthGate
+} = startupFlow;
 
 function resetClientState() {
   clearJsonState(STORAGE_KEY);
   window.location.reload();
-}
-
-function getSecureBootSummaryText(optionKey) {
-  const labels = {
-    "microsoft-only": "安全启动已启用，使用 Microsoft 密钥集配置",
-    "microsoft-third-party": "安全启动已启用，使用 Microsoft 和第三方 CA 密钥集配置",
-    disabled: "安全启动已关闭"
-  };
-  return labels[optionKey] || labels["microsoft-third-party"];
 }
 
 function applySecureBootSummary(optionKey) {
@@ -437,7 +318,7 @@ function applySecureBootSummary(optionKey) {
 }
 
 function loadState() {
-  return loadJsonState(STORAGE_KEY, getDefaultState());
+  return loadJsonState(STORAGE_KEY, getDefaultState(bootItems));
 }
 
 const persistedState = loadState();
@@ -454,6 +335,28 @@ function updateCurrentDateTime() {
   if (currentDateTimeValue) {
     currentDateTimeValue.textContent = formatDateTime(getEffectiveCurrentDate());
   }
+}
+
+function stopAuthGateLoaderAnimation() {
+  if (authGateLoaderTimer !== null) {
+    window.clearInterval(authGateLoaderTimer);
+    authGateLoaderTimer = null;
+  }
+  authGateLoaderFrameIndex = 0;
+  if (authGateLoader && AUTH_GATE_LOADER_FRAMES.length > 0) {
+    authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0];
+  }
+}
+
+function startAuthGateLoaderAnimation() {
+  stopAuthGateLoaderAnimation();
+  if (!authGateLoader || AUTH_GATE_LOADER_FRAMES.length === 0) {
+    return;
+  }
+  authGateLoaderTimer = window.setInterval(() => {
+    authGateLoaderFrameIndex = (authGateLoaderFrameIndex + 1) % AUTH_GATE_LOADER_FRAMES.length;
+    authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[authGateLoaderFrameIndex];
+  }, 32);
 }
 
 function syncToggleText(button) {
@@ -749,7 +652,9 @@ function persistSecureBootOption() {
   }
   const optionKey = selectedOption.dataset.secureBootOption || "microsoft-third-party";
   persistedState.secureBootOption = optionKey;
+  persistedState.lastSecureBootOption = optionKey;
   saveState();
+  syncDeviceInfoSummary();
   applySecureBootSummary(optionKey);
 }
 
@@ -799,10 +704,7 @@ function setActivePanel(panelKey, options = {}) {
     panel.classList.toggle("active", panel.dataset.panelContent === panelKey);
   });
 
-  sidebarKeyboardIndex = Math.max(
-    0,
-    sidebarItems.findIndex((button) => button.dataset.panel === panelKey)
-  );
+  sidebarKeyboardIndex = getSidebarIndex(panelKey);
   navigationArea = "sidebar";
   if (panelKey === "boot") {
     resetBootHighlight();
@@ -881,35 +783,9 @@ function resetAuthPasswordDialogState() {
   }
 }
 
-function startAuthGate() {
-  document.body.classList.add("auth-gate");
-  document.body.classList.remove(
-    "auth-gate-reveal",
-    "auth-gate-reveal-fast",
-    "auth-gate-show-wait",
-    "auth-gate-show-loader",
-    "auth-gate-fading-out",
-    "auth-gate-blackhold",
-    "pre-uefi-active",
-    "pre-uefi-fading-in"
-  );
-}
-
-function finishAuthGateReveal() {
-  showPreUefiScreen();
-}
-
-function finishAuthGateRevealFast() {
-  document.body.classList.remove("auth-gate");
-  document.body.classList.remove("auth-gate-blackhold");
-  hidePreUefiScreen();
-  document.body.classList.add("auth-gate-reveal-fast");
-  window.setTimeout(() => {
-    document.body.classList.remove("auth-gate-reveal-fast");
-  }, 90);
-}
-
 function enterUefiFromPreScreen() {
+  resetSidebarKeyboardAnchor();
+  disableKeyboardMode();
   finishAuthGateRevealFast();
 }
 
@@ -918,67 +794,20 @@ function continueToUefiFromPreScreen() {
     return;
   }
 
-  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
-  lockPreUefiInteraction(3000);
-  currentViewElement?.classList.remove("is-active", "is-fading-in");
-  currentViewElement?.classList.add("is-fading-out");
-  document.body.classList.add("pre-uefi-fading-out");
-
-  window.setTimeout(() => {
-    currentViewElement?.classList.remove("is-fading-out");
-    document.body.classList.remove("pre-uefi-active", "pre-uefi-fading-in", "pre-uefi-fading-out");
-    document.body.classList.add("auth-gate-blackhold");
-
-    window.setTimeout(() => {
-      document.body.classList.remove("auth-gate-blackhold");
-      startAuthGate();
-
-      window.setTimeout(() => {
-        document.body.classList.remove("auth-gate");
-        document.body.classList.add("auth-gate-blackhold");
-
-        if (persistedState.uefiPassword) {
-          openAuthPasswordDialog(false);
-          return;
-        }
-
-        finishAuthGateRevealFast();
-      }, 400);
-    }, 2000);
-  }, 200);
+  startupFlow.continueToUefiFromPreScreen({
+    lockInteraction: lockPreUefiInteraction,
+    startAuthGate,
+    openAuthPasswordDialog,
+    hasPassword: () => Boolean(persistedState.uefiPassword)
+  });
 }
 
 function switchPreUefiView(nextView) {
   if (preUefiInteractionLocked) {
     return;
   }
-  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
-  const nextViewElement = nextView === "device" ? devicePageView : preUefiMainView;
-  if (!currentViewElement || !nextViewElement || currentViewElement === nextViewElement) {
-    return;
-  }
-
-  lockPreUefiInteraction(420);
-
-  currentViewElement.classList.remove("is-active", "is-fading-in");
-  currentViewElement.classList.add("is-fading-out");
-
-  window.setTimeout(() => {
-    currentViewElement.classList.remove("is-fading-out");
-    nextViewElement.classList.add("is-prep");
-    currentPreUefiView = nextView;
-    activePreUefiActionIndex = 0;
-    syncPreUefiSelection(0);
-    window.requestAnimationFrame(() => {
-      void nextViewElement.offsetWidth;
-      nextViewElement.classList.remove("is-prep");
-      nextViewElement.classList.add("is-fading-in");
-      window.setTimeout(() => {
-        nextViewElement.classList.remove("is-fading-in");
-        nextViewElement.classList.add("is-active");
-      }, 200);
-    });
-  }, 200);
+  activePreUefiActionIndex = 0;
+  startupFlow.switchPreUefiView(nextView, { lockInteraction: lockPreUefiInteraction });
 }
 
 function setDevicePageNavPressed(pressed) {
@@ -986,6 +815,34 @@ function setDevicePageNavPressed(pressed) {
     return;
   }
   devicePageBackButton.classList.toggle("is-pressed", pressed);
+}
+
+function setTroubleshootPageNavPressed(pressed) {
+  if (!troubleshootPageBackButton) {
+    return;
+  }
+  troubleshootPageBackButton.classList.toggle("is-pressed", pressed);
+}
+
+function setStartupSettingsPageNavPressed(pressed) {
+  if (!startupSettingsBackButton) {
+    return;
+  }
+  startupSettingsBackButton.classList.toggle("is-pressed", pressed);
+}
+
+function setCommandPromptPageNavPressed(pressed) {
+  if (!commandPromptBackButton) {
+    return;
+  }
+  commandPromptBackButton.classList.toggle("is-pressed", pressed);
+}
+
+function setSystemImageRecoveryPageNavPressed(pressed) {
+  if (!systemImageRecoveryBackButton) {
+    return;
+  }
+  systemImageRecoveryBackButton.classList.toggle("is-pressed", pressed);
 }
 
 if (devicePageBackButton) {
@@ -1023,45 +880,133 @@ function setPreUefiPressed(button, pressed) {
 }
 
 function restartIntoUefi() {
-  const isInsidePreUefi = document.body.classList.contains("pre-uefi-active");
-  const currentViewElement = currentPreUefiView === "device" ? devicePageView : preUefiMainView;
+  startupFlow.restartIntoUefi({
+    lockInteraction: lockPreUefiInteraction,
+    hidePreUefiScreen,
+    startAuthGate,
+    finishAuthGateReveal,
+    onBeforeRestart: () => {
+      restrictedMode = false;
+      syncRestrictedMode();
+      clearKeyboardSelection();
+      navigationArea = "sidebar";
+      sidebarKeyboardIndex = 0;
+      setActivePanel("device-info", { flash: false });
+    }
+  });
+}
 
-  restrictedMode = false;
-  syncRestrictedMode();
-  clearKeyboardSelection();
-  navigationArea = "sidebar";
-  sidebarKeyboardIndex = 0;
-  setActivePanel("device-info", { flash: false });
+if (startupSettingsBackButton) {
+  startupSettingsBackButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setStartupSettingsPageNavPressed(true);
+  });
 
-  const beginBlackHold = () => {
-    hidePreUefiScreen();
-    document.body.classList.remove("auth-gate");
-    document.body.classList.remove("auth-gate-reveal", "auth-gate-reveal-fast");
-    document.body.classList.add("auth-gate-blackhold");
-    window.setTimeout(() => {
-      document.body.classList.remove("auth-gate-blackhold");
-      startAuthGate();
-      finishAuthGateReveal();
-    }, 2000);
-  };
+  startupSettingsBackButton.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setStartupSettingsPageNavPressed(false);
+  });
 
-  if (isInsidePreUefi) {
-    lockPreUefiInteraction(2200);
-    currentViewElement?.classList.remove("is-active", "is-fading-in");
-    currentViewElement?.classList.add("is-fading-out");
-    document.body.classList.add("pre-uefi-fading-out");
-    window.setTimeout(() => {
-      currentViewElement?.classList.remove("is-fading-out");
-      document.body.classList.remove("pre-uefi-fading-out");
-      beginBlackHold();
-    }, 200);
-    return;
-  }
+  startupSettingsBackButton.addEventListener("mouseleave", () => {
+    setStartupSettingsPageNavPressed(false);
+  });
 
-  beginBlackHold();
+  startupSettingsBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    setStartupSettingsPageNavPressed(false);
+  });
+}
+
+if (commandPromptBackButton) {
+  commandPromptBackButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setCommandPromptPageNavPressed(true);
+  });
+
+  commandPromptBackButton.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setCommandPromptPageNavPressed(false);
+  });
+
+  commandPromptBackButton.addEventListener("mouseleave", () => {
+    setCommandPromptPageNavPressed(false);
+  });
+
+  commandPromptBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    setCommandPromptPageNavPressed(false);
+  });
+}
+
+if (systemImageRecoveryBackButton) {
+  systemImageRecoveryBackButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setSystemImageRecoveryPageNavPressed(true);
+  });
+
+  systemImageRecoveryBackButton.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setSystemImageRecoveryPageNavPressed(false);
+  });
+
+  systemImageRecoveryBackButton.addEventListener("mouseleave", () => {
+    setSystemImageRecoveryPageNavPressed(false);
+  });
+
+  systemImageRecoveryBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    setSystemImageRecoveryPageNavPressed(false);
+  });
+}
+
+if (troubleshootPageBackButton) {
+  troubleshootPageBackButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setTroubleshootPageNavPressed(true);
+  });
+
+  troubleshootPageBackButton.addEventListener("mouseup", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    setTroubleshootPageNavPressed(false);
+  });
+
+  troubleshootPageBackButton.addEventListener("mouseleave", () => {
+    setTroubleshootPageNavPressed(false);
+  });
+
+  troubleshootPageBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    setTroubleshootPageNavPressed(false);
+  });
 }
 
 function enterUefiOnLoad() {
+  resetSidebarKeyboardAnchor();
+  disableKeyboardMode();
   startAuthGate();
   finishAuthGateReveal();
 }
@@ -1361,17 +1306,70 @@ function moveBootItemByKeyboard(direction) {
 }
 
 function handleKeyboardNavigation(event) {
-  if (event.key === "Home") {
+  if (event.key === "Insert") {
     event.preventDefault();
     resetClientState();
     return;
   }
 
   if (document.body.classList.contains("pre-uefi-active") && !getOpenModal()) {
+    if (event.key === "Backspace") {
+      if (currentPreUefiView === "startup-settings") {
+        event.preventDefault();
+        if (preUefiInteractionLocked) {
+          return;
+        }
+        switchPreUefiView("troubleshoot");
+        return;
+      }
+
+      if (currentPreUefiView === "command-prompt") {
+        event.preventDefault();
+        if (preUefiInteractionLocked) {
+          return;
+        }
+        switchPreUefiView("troubleshoot");
+        return;
+      }
+
+      if (currentPreUefiView === "system-image-recovery") {
+        event.preventDefault();
+        if (preUefiInteractionLocked) {
+          return;
+        }
+        switchPreUefiView("troubleshoot");
+        return;
+      }
+
+      if (currentPreUefiView === "device" || currentPreUefiView === "troubleshoot") {
+        event.preventDefault();
+        if (preUefiInteractionLocked) {
+          return;
+        }
+        switchPreUefiView("main");
+        return;
+      }
+    }
+
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
       event.preventDefault();
       if (currentPreUefiView === "device") {
         syncPreUefiSelection(0);
+      } else if (currentPreUefiView === "startup-settings") {
+        syncPreUefiSelection(0);
+      } else if (
+        currentPreUefiView === "command-prompt" ||
+        currentPreUefiView === "system-image-recovery"
+      ) {
+        syncPreUefiSelection(0);
+      } else if (currentPreUefiView === "troubleshoot") {
+        const troubleshootMoves = {
+          ArrowUp: [0, 0, 1, 3],
+          ArrowDown: [1, 2, 2, 3],
+          ArrowLeft: [0, 1, 2, 0],
+          ArrowRight: [3, 3, 3, 3]
+        };
+        syncPreUefiSelection(troubleshootMoves[event.key][activePreUefiActionIndex] ?? 0);
       } else {
         const preUefiMoves = {
           ArrowUp: [0, 0, 1, 3],
@@ -1410,6 +1408,22 @@ function handleKeyboardNavigation(event) {
     " "
   ];
   if (navigationKeys.includes(event.key)) {
+    if (!document.body.classList.contains("keyboard-mode")) {
+      const activeSidebarIndex = getActiveSidebarIndex();
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        const delta = event.key === "ArrowUp" ? -1 : 1;
+        sidebarKeyboardIndex = Math.max(0, Math.min(activeSidebarIndex + delta, sidebarItems.length - 1));
+        navigationArea = "sidebar";
+      } else {
+        sidebarKeyboardIndex = activeSidebarIndex;
+      }
+      enableKeyboardMode();
+      applyKeyboardSelection();
+      if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+        event.preventDefault();
+        return;
+      }
+    }
     enableKeyboardMode();
   }
 
@@ -1419,10 +1433,7 @@ function handleKeyboardNavigation(event) {
 
   if (event.key === "ArrowLeft") {
     event.preventDefault();
-    sidebarKeyboardIndex = Math.max(
-      0,
-      sidebarItems.findIndex((button) => button.classList.contains("active"))
-    );
+    sidebarKeyboardIndex = getActiveSidebarIndex();
     navigationArea = "sidebar";
     applyKeyboardSelection();
     return;
@@ -1510,19 +1521,14 @@ updateCurrentDateTime();
 applyKeyboardSelection();
 enterUefiOnLoad();
 
-if (authGateLoader && AUTH_GATE_LOADER_FRAMES.length > 0) {
-  authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0];
-  window.setInterval(() => {
-    authGateLoaderFrameIndex = (authGateLoaderFrameIndex + 1) % AUTH_GATE_LOADER_FRAMES.length;
-    authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[authGateLoaderFrameIndex];
-  }, 32);
-}
+stopAuthGateLoaderAnimation();
 
 window.addEventListener("resize", resizeStage);
 window.setInterval(updateCurrentDateTime, 1000);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("keydown", handleKeyboardNavigation);
 window.addEventListener("mousedown", () => {
+  resetSidebarKeyboardAnchor();
   disableKeyboardMode();
 });
 
@@ -1916,7 +1922,7 @@ if (secureBootDialogOpen && secureBootDialog) {
 }
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Home") {
+  if (event.key === "Insert") {
     event.preventDefault();
     resetClientState();
     return;
@@ -2385,8 +2391,56 @@ preUefiActions.forEach((button, index) => {
   });
 });
 
-if (enterUefiButton) {
-  enterUefiButton.addEventListener("click", (event) => {
+if (useDeviceButton) {
+  useDeviceButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("device");
+  });
+}
+
+if (troubleshootButton) {
+  troubleshootButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
+  });
+}
+
+if (startupSettingsButton) {
+  startupSettingsButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("startup-settings");
+  });
+}
+
+if (commandPromptButton) {
+  commandPromptButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("command-prompt");
+  });
+}
+
+if (uefiFirmwareSettingsButton) {
+  uefiFirmwareSettingsButton.addEventListener("click", (event) => {
     if (event.button !== 0 && event.detail !== 0) {
       return;
     }
@@ -2397,15 +2451,15 @@ if (enterUefiButton) {
   });
 }
 
-if (useDeviceButton) {
-  useDeviceButton.addEventListener("click", (event) => {
+if (systemImageRecoveryButton) {
+  systemImageRecoveryButton.addEventListener("click", (event) => {
     if (event.button !== 0 && event.detail !== 0) {
       return;
     }
     if (preUefiInteractionLocked) {
       return;
     }
-    switchPreUefiView("device");
+    switchPreUefiView("system-image-recovery");
   });
 }
 
@@ -2430,6 +2484,90 @@ if (devicePageBackButton) {
       return;
     }
     switchPreUefiView("main");
+  });
+}
+
+if (troubleshootPageBackButton) {
+  troubleshootPageBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("main");
+  });
+}
+
+if (startupSettingsBackButton) {
+  startupSettingsBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
+  });
+}
+
+if (startupSettingsRestartButton) {
+  startupSettingsRestartButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    restartIntoUefi();
+  });
+}
+
+if (commandPromptBackButton) {
+  commandPromptBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
+  });
+}
+
+if (commandPromptConfirmButton) {
+  commandPromptConfirmButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
+  });
+}
+
+if (systemImageRecoveryBackButton) {
+  systemImageRecoveryBackButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
+  });
+}
+
+if (systemImageRecoveryConfirmButton) {
+  systemImageRecoveryConfirmButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    switchPreUefiView("troubleshoot");
   });
 }
 

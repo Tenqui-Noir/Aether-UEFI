@@ -1,6 +1,9 @@
 :root {
+  color-scheme: light dark;
   --design-width: 1920;
   --design-height: 1080;
+  --page-background: #d8d5d0;
+  --stage-background: #ffffff;
   --topbar-color: #e6e5e4;
   --sidebar-color: #f7f7f7;
   --active-color: #8bd0f0;
@@ -8,6 +11,21 @@
   --button-color: #e1e1e1;
   --button-pressed-color: #cccccc;
   --toggle-on-color: #0078d7;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --page-background: #d8d5d0;
+    --stage-background: #ffffff;
+    --topbar-color: #e6e5e4;
+    --sidebar-color: #f7f7f7;
+    --active-color: #8bd0f0;
+    --text-color: #000000;
+    --button-color: #e1e1e1;
+    --button-pressed-color: #cccccc;
+    --toggle-on-color: #0078d7;
+  }
 }
 
 @font-face {
@@ -35,7 +53,7 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #d8d5d0;
+  background: var(--page-background);
   font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
   color: var(--text-color);
   cursor: default;
@@ -55,7 +73,7 @@ body {
   width: calc(var(--design-width) * 1px);
   height: calc(var(--design-height) * 1px);
   transform-origin: top left;
-  background: #ffffff;
+  background: var(--stage-background);
   display: flex;
   flex-direction: column;
 }
@@ -282,24 +300,25 @@ body.auth-gate-fading-out .auth-gate-content {
 }
 
 .device-page-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  margin-left: -80px;
+  position: relative;
+  margin-left: 18px;
 }
 
 .device-page-title {
+  display: block;
   font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 52px;
   line-height: 1.08;
   color: #ffffff;
   font-weight: 300;
   letter-spacing: 0.02em;
-  margin-left: 18px;
+  margin: 0;
 }
 
 .device-page-title-back {
-  position: relative;
+  position: absolute;
+  left: -80px;
+  top: -8px;
   width: 72px;
   height: 72px;
   border: none;
@@ -339,12 +358,89 @@ body.auth-gate-fading-out .auth-gate-content {
 
 .device-page-empty {
   margin-top: 54px;
-  margin-left: 68px;
+  margin-left: 18px;
   font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
   font-size: 22px;
   line-height: 1.3;
   color: #ffffff;
   font-weight: 300;
+}
+
+.troubleshoot-page-actions {
+  margin-top: 34px;
+  margin-left: 18px;
+}
+
+.startup-settings-page-body {
+  margin-top: 38px;
+  margin-left: 18px;
+  max-width: 860px;
+  color: #ffffff;
+}
+
+.startup-settings-intro {
+  font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-size: 34px;
+  line-height: 1.2;
+  font-weight: 300;
+}
+
+.startup-settings-list {
+  margin: 22px 0 0 34px;
+  padding: 0;
+  font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-size: 22px;
+  line-height: 1.9;
+  font-weight: 300;
+  color: #ffffff;
+}
+
+.startup-settings-restart {
+  position: absolute;
+  right: 124px;
+  bottom: 400px;
+  width: 120px;
+  height: 40px;
+  border: 3px solid transparent;
+  padding: 0;
+  background: transparent;
+  color: #ffffff;
+  font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 300;
+  cursor: default;
+}
+
+.startup-settings-restart:hover {
+  background: #3679c0;
+}
+
+.startup-settings-restart.is-selected {
+  border-color: #ffffff;
+}
+
+body.keyboard-mode .startup-settings-restart.is-selected::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border: 1px dashed #ffffff;
+  pointer-events: none;
+}
+
+.startup-settings-restart.is-pressed {
+  background: #ffffff;
+  color: #2067b2;
+}
+
+.command-prompt-page-text {
+  margin-top: 40px;
+  margin-left: 18px;
+  font-family: "Microsoft YaHei Light", "Microsoft YaHei", "微软雅黑", sans-serif;
+  font-size: 22px;
+  line-height: 1.4;
+  font-weight: 300;
+  color: #ffffff;
 }
 
 .screen-flash-overlay {
