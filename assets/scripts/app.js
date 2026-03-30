@@ -6,10 +6,39 @@ import { createStartupFlow } from "./features/startup-flow.js";
 
 const DESIGN_WIDTH = 1920;
 const DESIGN_HEIGHT = 1080;
+
+function mountUefiShellIfNeeded() {
+  if (document.getElementById("uefiShell")) {
+    return;
+  }
+
+  const stageElement = document.getElementById("stage");
+  const template = document.getElementById("uefiShellTemplate");
+  if (!stageElement || !(template instanceof HTMLTemplateElement)) {
+    return;
+  }
+
+  const fragment = template.content.cloneNode(true);
+  const firstModal = stageElement.querySelector(".modal-overlay");
+  if (firstModal) {
+    firstModal.before(fragment);
+    return;
+  }
+  stageElement.appendChild(fragment);
+}
+
+mountUefiShellIfNeeded();
+
 const {
   stage,
   panelArea,
   authGateLoader,
+  windowsLoginScreen,
+  windowsLoginBackground,
+  windowsLoginClock,
+  windowsLoginTime,
+  windowsLoginDate,
+  windowsLoginRestartButton,
   sidebarItems,
   panels,
   toggleButtons,
@@ -105,6 +134,12 @@ let preUefiEnterPressed = false;
 let currentPreUefiView = "main";
 let preUefiInteractionLocked = false;
 let preUefiInteractionLockTimer = null;
+let windowsLoginFlowTimerIds = [];
+let windowsLoginClockTimer = null;
+let windowsLoginInteractionTimer = null;
+let windowsLoginAvatarTimer = null;
+let windowsLoginIdleResetTimer = null;
+const PRE_UEFI_BOOT_LOCK_MAX_DURATION = 12000;
 
 let dragCandidateItem = null;
 let draggedBootItem = null;
@@ -298,6 +333,7 @@ const startupFlow = createStartupFlow({
 });
 
 const {
+  clearPendingPreUefiBoot,
   finishAuthGateReveal,
   finishAuthGateRevealFast,
   getVisiblePreUefiControls,
@@ -346,6 +382,173 @@ function stopAuthGateLoaderAnimation() {
   if (authGateLoader && AUTH_GATE_LOADER_FRAMES.length > 0) {
     authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0];
   }
+}
+
+function clearWindowsLoginFlowTimers() {
+  windowsLoginFlowTimerIds.forEach((timerId) => {
+    window.clearTimeout(timerId);
+  });
+  windowsLoginFlowTimerIds = [];
+}
+
+function resetWindowsLoginScreen() {
+  clearWindowsLoginFlowTimers();
+  stopAuthGateLoaderAnimation();
+  if (windowsLoginClockTimer !== null) {
+    window.clearInterval(windowsLoginClockTimer);
+    windowsLoginClockTimer = null;
+  }
+  if (windowsLoginInteractionTimer !== null) {
+    window.clearTimeout(windowsLoginInteractionTimer);
+    windowsLoginInteractionTimer = null;
+  }
+  if (windowsLoginAvatarTimer !== null) {
+    window.clearTimeout(windowsLoginAvatarTimer);
+    windowsLoginAvatarTimer = null;
+  }
+  if (windowsLoginIdleResetTimer !== null) {
+    window.clearTimeout(windowsLoginIdleResetTimer);
+    windowsLoginIdleResetTimer = null;
+  }
+  if (windowsLoginClock) {
+    windowsLoginClock.setAttribute("aria-hidden", "true");
+  }
+  if (windowsLoginTime) {
+    windowsLoginTime.textContent = "";
+  }
+  if (windowsLoginDate) {
+    windowsLoginDate.textContent = "";
+  }
+  windowsLoginScreen?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove(
+    "login-boot",
+    "login-boot-blackhold",
+    "login-boot-loading",
+    "windows-login-active",
+    "windows-login-visible",
+    "windows-login-time-visible",
+    "windows-login-interacted",
+    "windows-login-image-interacted",
+    "windows-login-avatar-visible"
+  );
+}
+
+function triggerWindowsLoginInteraction() {
+  if (!document.body.classList.contains("windows-login-active")) {
+    return;
+  }
+
+  if (windowsLoginInteractionTimer !== null) {
+    window.clearTimeout(windowsLoginInteractionTimer);
+    windowsLoginInteractionTimer = null;
+  }
+  if (windowsLoginAvatarTimer !== null) {
+    window.clearTimeout(windowsLoginAvatarTimer);
+    windowsLoginAvatarTimer = null;
+  }
+  if (windowsLoginIdleResetTimer !== null) {
+    window.clearTimeout(windowsLoginIdleResetTimer);
+    windowsLoginIdleResetTimer = null;
+  }
+
+  document.body.classList.add("windows-login-interacted");
+
+  windowsLoginAvatarTimer = window.setTimeout(() => {
+    document.body.classList.add("windows-login-avatar-visible");
+    windowsLoginAvatarTimer = null;
+  }, 100);
+
+  windowsLoginInteractionTimer = window.setTimeout(() => {
+    document.body.classList.add("windows-login-image-interacted");
+    windowsLoginInteractionTimer = null;
+  }, 100);
+
+  windowsLoginIdleResetTimer = window.setTimeout(() => {
+    document.body.classList.remove(
+      "windows-login-image-interacted",
+      "windows-login-avatar-visible",
+      "windows-login-interacted"
+    );
+    windowsLoginIdleResetTimer = null;
+  }, 5000);
+}
+
+function restartIntoWindowsRecovery() {
+  lockPreUefiInteraction(2800);
+  resetWindowsLoginScreen();
+  document.body.classList.remove("auth-gate");
+  document.body.classList.remove("auth-gate-reveal", "auth-gate-reveal-fast");
+  document.body.classList.add("auth-gate-blackhold");
+  window.setTimeout(() => {
+    window.location.reload();
+  }, 2800);
+}
+
+function ensureWindowsLoginBackgroundReady() {
+  if (!windowsLoginBackground) {
+    return Promise.resolve();
+  }
+
+  if (windowsLoginBackground.complete && windowsLoginBackground.naturalWidth > 0) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const handleDone = () => {
+      windowsLoginBackground.removeEventListener("load", handleDone);
+      windowsLoginBackground.removeEventListener("error", handleDone);
+      resolve();
+    };
+
+    windowsLoginBackground.addEventListener("load", handleDone, { once: true });
+    windowsLoginBackground.addEventListener("error", handleDone, { once: true });
+
+    if (!windowsLoginBackground.getAttribute("src")) {
+      const imageSrc = windowsLoginBackground.dataset.src;
+      if (imageSrc) {
+        windowsLoginBackground.setAttribute("src", imageSrc);
+      }
+    }
+
+    if (windowsLoginBackground.complete && windowsLoginBackground.naturalWidth > 0) {
+      handleDone();
+    }
+  });
+}
+
+function formatWindowsLoginTime(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function formatWindowsLoginDate(date) {
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}月${day}日，星期${weekdays[date.getDay()]}`;
+}
+
+function updateWindowsLoginTime() {
+  if (!windowsLoginTime) {
+    return;
+  }
+  windowsLoginTime.textContent = formatWindowsLoginTime(getEffectiveCurrentDate());
+  if (windowsLoginDate) {
+    windowsLoginDate.textContent = formatWindowsLoginDate(getEffectiveCurrentDate());
+  }
+}
+
+function startWindowsLoginClock() {
+  if (!windowsLoginClock || !windowsLoginTime) {
+    return;
+  }
+  updateWindowsLoginTime();
+  windowsLoginClock.setAttribute("aria-hidden", "false");
+  if (windowsLoginClockTimer !== null) {
+    window.clearInterval(windowsLoginClockTimer);
+  }
+  windowsLoginClockTimer = window.setInterval(updateWindowsLoginTime, 1000);
 }
 
 function startAuthGateLoaderAnimation() {
@@ -802,6 +1005,152 @@ function continueToUefiFromPreScreen() {
   });
 }
 
+function isDeleteToUefiBootWindow() {
+  const inAuthGateLeadIn =
+    document.body.classList.contains("auth-gate") &&
+    !document.body.classList.contains("auth-gate-show-wait") &&
+    !document.body.classList.contains("auth-gate-show-loader") &&
+    !document.body.classList.contains("auth-gate-fading-out") &&
+    !document.body.classList.contains("auth-gate-blackhold");
+  const inLoginBootLeadIn =
+    document.body.classList.contains("login-boot") &&
+    !document.body.classList.contains("login-boot-loading");
+
+  return inAuthGateLeadIn || inLoginBootLeadIn;
+}
+
+function enterUefiFromBootShortcut() {
+  clearPendingPreUefiBoot?.();
+  resetWindowsLoginScreen();
+  resetSidebarKeyboardAnchor();
+  disableKeyboardMode();
+  document.body.classList.remove(
+    "auth-gate-show-wait",
+    "auth-gate-show-loader",
+    "auth-gate-fading-out",
+    "auth-gate-blackhold",
+    "pre-uefi-active",
+    "pre-uefi-fading-in",
+    "pre-uefi-fading-out"
+  );
+  startAuthGate();
+
+  window.setTimeout(() => {
+    document.body.classList.remove("auth-gate");
+    document.body.classList.add("auth-gate-blackhold");
+
+    if (persistedState.uefiPassword) {
+      openAuthPasswordDialog(false);
+      return;
+    }
+
+    finishAuthGateRevealFast();
+  }, 400);
+}
+
+function getCurrentPreUefiViewElement() {
+  if (currentPreUefiView === "device") {
+    return devicePageView;
+  }
+  if (currentPreUefiView === "troubleshoot") {
+    return troubleshootPageView;
+  }
+  if (currentPreUefiView === "startup-settings") {
+    return startupSettingsPageView;
+  }
+  if (currentPreUefiView === "command-prompt") {
+    return commandPromptPageView;
+  }
+  if (currentPreUefiView === "system-image-recovery") {
+    return systemImageRecoveryPageView;
+  }
+  return preUefiMainView;
+}
+
+function continueToWindowsLoginFromPreScreen() {
+  if (preUefiInteractionLocked) {
+    return;
+  }
+
+  const loginBlackHoldBeforeLogo = 3000;
+  const loginLoaderDelay = 2000;
+  const loginLoaderDuration = 3000 + Math.floor(Math.random() * 4001);
+  const loginBlackHoldAfterLoader = 2000;
+  const isInsidePreUefi = document.body.classList.contains("pre-uefi-active");
+  const currentViewElement = getCurrentPreUefiViewElement();
+
+  const beginWindowsLoginFlow = () => {
+    windowsLoginFlowTimerIds.push(
+      window.setTimeout(() => {
+        hidePreUefiScreen();
+        document.body.classList.add("login-boot-blackhold");
+
+        windowsLoginFlowTimerIds.push(
+          window.setTimeout(() => {
+            document.body.classList.remove("login-boot-blackhold");
+            document.body.classList.add("login-boot");
+
+            windowsLoginFlowTimerIds.push(
+              window.setTimeout(() => {
+                if (authGateLoader && AUTH_GATE_LOADER_FRAMES.length > 0) {
+                  authGateLoader.textContent = AUTH_GATE_LOADER_FRAMES[0];
+                }
+                startAuthGateLoaderAnimation();
+                document.body.classList.add("login-boot-loading");
+
+                windowsLoginFlowTimerIds.push(
+                  window.setTimeout(() => {
+                    stopAuthGateLoaderAnimation();
+                    document.body.classList.remove("login-boot", "login-boot-loading");
+                    document.body.classList.add("login-boot-blackhold");
+
+                    windowsLoginFlowTimerIds.push(
+                      window.setTimeout(() => {
+                        ensureWindowsLoginBackgroundReady().then(() => {
+                          document.body.classList.remove("login-boot-blackhold");
+                          windowsLoginScreen?.setAttribute("aria-hidden", "false");
+                          document.body.classList.add("windows-login-active");
+                          startWindowsLoginClock();
+                          document.body.classList.add("windows-login-time-visible");
+                          windowsLoginFlowTimerIds.push(
+                            window.setTimeout(() => {
+                              window.requestAnimationFrame(() => {
+                                window.requestAnimationFrame(() => {
+                                  document.body.classList.add("windows-login-visible");
+                                  windowsLoginFlowTimerIds = [];
+                                });
+                              });
+                            }, 200)
+                          );
+                        });
+                      }, loginBlackHoldAfterLoader)
+                    );
+                  }, loginLoaderDuration)
+                );
+              }, loginLoaderDelay)
+            );
+          }, loginBlackHoldBeforeLogo)
+        );
+      }, isInsidePreUefi ? 200 : 0)
+    );
+  };
+
+  resetWindowsLoginScreen();
+  lockPreUefiInteraction(
+    loginBlackHoldBeforeLogo + loginLoaderDelay + loginLoaderDuration + loginBlackHoldAfterLoader + 800
+  );
+  if (isInsidePreUefi) {
+    currentViewElement?.classList.remove("is-active", "is-fading-in");
+    currentViewElement?.classList.add("is-fading-out");
+    document.body.classList.add("pre-uefi-fading-out");
+    beginWindowsLoginFlow();
+    return;
+  }
+
+  document.body.classList.remove("auth-gate", "auth-gate-blackhold", "auth-gate-reveal", "auth-gate-reveal-fast");
+  beginWindowsLoginFlow();
+}
+
 function switchPreUefiView(nextView) {
   if (preUefiInteractionLocked) {
     return;
@@ -1007,6 +1356,7 @@ if (troubleshootPageBackButton) {
 function enterUefiOnLoad() {
   resetSidebarKeyboardAnchor();
   disableKeyboardMode();
+  resetWindowsLoginScreen();
   startAuthGate();
   finishAuthGateReveal();
 }
@@ -1527,7 +1877,11 @@ window.addEventListener("resize", resizeStage);
 window.setInterval(updateCurrentDateTime, 1000);
 window.addEventListener("contextmenu", (event) => event.preventDefault());
 window.addEventListener("keydown", handleKeyboardNavigation);
+window.addEventListener("keydown", () => {
+  triggerWindowsLoginInteraction();
+});
 window.addEventListener("mousedown", () => {
+  triggerWindowsLoginInteraction();
   resetSidebarKeyboardAnchor();
   disableKeyboardMode();
 });
@@ -1922,9 +2276,26 @@ if (secureBootDialogOpen && secureBootDialog) {
 }
 
 window.addEventListener("keydown", (event) => {
+  if (event.key === "Delete" && isDeleteToUefiBootWindow()) {
+    event.preventDefault();
+    enterUefiFromBootShortcut();
+    return;
+  }
+
+  if (event.ctrlKey && event.key === "Enter") {
+    event.preventDefault();
+    continueToWindowsLoginFromPreScreen();
+    return;
+  }
+
   if (event.key === "Insert") {
     event.preventDefault();
     resetClientState();
+    return;
+  }
+
+  if (preUefiInteractionLocked && !getOpenModal()) {
+    event.preventDefault();
     return;
   }
 
@@ -2391,6 +2762,18 @@ preUefiActions.forEach((button, index) => {
   });
 });
 
+if (enterUefiButton) {
+  enterUefiButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    if (preUefiInteractionLocked) {
+      return;
+    }
+    continueToWindowsLoginFromPreScreen();
+  });
+}
+
 if (useDeviceButton) {
   useDeviceButton.addEventListener("click", (event) => {
     if (event.button !== 0 && event.detail !== 0) {
@@ -2471,7 +2854,7 @@ if (powerOffButton) {
     if (preUefiInteractionLocked) {
       return;
     }
-    restartIntoUefi();
+    continueToWindowsLoginFromPreScreen();
   });
 }
 
@@ -2568,6 +2951,31 @@ if (systemImageRecoveryConfirmButton) {
       return;
     }
     switchPreUefiView("troubleshoot");
+  });
+}
+
+if (windowsLoginRestartButton) {
+  windowsLoginRestartButton.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    windowsLoginRestartButton.classList.add("is-pressed");
+  });
+
+  windowsLoginRestartButton.addEventListener("mouseup", () => {
+    windowsLoginRestartButton.classList.remove("is-pressed");
+  });
+
+  windowsLoginRestartButton.addEventListener("mouseleave", () => {
+    windowsLoginRestartButton.classList.remove("is-pressed");
+  });
+
+  windowsLoginRestartButton.addEventListener("click", (event) => {
+    if (event.button !== 0 && event.detail !== 0) {
+      return;
+    }
+    windowsLoginRestartButton.classList.remove("is-pressed");
+    restartIntoWindowsRecovery();
   });
 }
 

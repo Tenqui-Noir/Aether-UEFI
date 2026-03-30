@@ -15,6 +15,23 @@ export function createStartupFlow({
   getCurrentPreUefiView,
   setCurrentPreUefiView
 }) {
+  let pendingPreUefiBootTimers = [];
+
+  function queueBootTimer(callback, delay) {
+    const timerId = window.setTimeout(() => {
+      pendingPreUefiBootTimers = pendingPreUefiBootTimers.filter((id) => id !== timerId);
+      callback();
+    }, delay);
+    pendingPreUefiBootTimers.push(timerId);
+    return timerId;
+  }
+
+  function clearPendingPreUefiBoot() {
+    pendingPreUefiBootTimers.forEach((timerId) => window.clearTimeout(timerId));
+    pendingPreUefiBootTimers = [];
+    stopAuthGateLoaderAnimation?.();
+  }
+
   function showPreUefiScreen() {
     const waitAppearDelay = 1000;
     const loaderAppearDelay = 1000;
@@ -24,6 +41,7 @@ export function createStartupFlow({
     const preUefiFadeDuration = 300;
     const menuDelay = 1000;
 
+    clearPendingPreUefiBoot();
     setCurrentPreUefiView("main");
     preUefiMainView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");
     devicePageView?.classList.remove("is-active", "is-fading-in", "is-fading-out", "is-prep");
@@ -40,20 +58,20 @@ export function createStartupFlow({
       "pre-uefi-fading-in"
     );
 
-    window.setTimeout(() => {
+    queueBootTimer(() => {
       document.body.classList.add("auth-gate-show-wait");
 
-      window.setTimeout(() => {
+      queueBootTimer(() => {
         if (authGateLoaderFrames.length > 0 && authGateLoader) {
           authGateLoader.textContent = authGateLoaderFrames[0];
         }
         startAuthGateLoaderAnimation?.();
         document.body.classList.add("auth-gate-show-loader");
 
-        window.setTimeout(() => {
+        queueBootTimer(() => {
           document.body.classList.add("auth-gate-fading-out");
 
-          window.setTimeout(() => {
+          queueBootTimer(() => {
             document.body.classList.remove("auth-gate-show-wait");
             document.body.classList.remove("auth-gate-show-loader");
             stopAuthGateLoaderAnimation?.();
@@ -61,7 +79,7 @@ export function createStartupFlow({
             document.body.classList.remove("auth-gate-fading-out");
             document.body.classList.add("auth-gate-blackhold");
 
-            window.setTimeout(() => {
+            queueBootTimer(() => {
               document.body.classList.remove("auth-gate-blackhold");
               document.body.classList.add("pre-uefi-active");
 
@@ -69,8 +87,8 @@ export function createStartupFlow({
                 void preUefiScreen?.offsetWidth;
                 document.body.classList.add("pre-uefi-fading-in");
 
-                window.setTimeout(() => {
-                  window.setTimeout(() => {
+                queueBootTimer(() => {
+                  queueBootTimer(() => {
                     preUefiMainView?.classList.add("is-prep");
                     syncPreUefiSelection(getInitialPreUefiSelection?.("main") ?? 0);
 
@@ -79,7 +97,7 @@ export function createStartupFlow({
                       preUefiMainView?.classList.remove("is-prep");
                       preUefiMainView?.classList.add("is-fading-in");
 
-                      window.setTimeout(() => {
+                      queueBootTimer(() => {
                         preUefiMainView?.classList.remove("is-fading-in");
                         preUefiMainView?.classList.add("is-active");
                       }, preUefiFadeDuration);
@@ -291,6 +309,7 @@ export function createStartupFlow({
   }
 
   return {
+    clearPendingPreUefiBoot,
     continueToUefiFromPreScreen,
     finishAuthGateReveal,
     finishAuthGateRevealFast,

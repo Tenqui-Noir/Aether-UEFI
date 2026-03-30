@@ -13,9 +13,21 @@
     <main class="stage" id="stage">
       <div class="auth-gate-screen" id="authGateScreen" aria-hidden="true">
         <div class="auth-gate-content">
-          <img class="auth-gate-logo" src="img/logo_UEFI.png" alt="">
+          <img class="auth-gate-logo" src="img/logo_UEFI.png" alt="" draggable="false">
           <div class="auth-gate-loader" aria-hidden="true"></div>
           <div class="auth-gate-wait">请稍后</div>
+        </div>
+      </div>
+
+      <div class="windows-login-screen" id="windowsLoginScreen" aria-hidden="true">
+        <img class="windows-login-background" id="windowsLoginBackground" data-src="img/Windows 365.jpg" alt="" draggable="false">
+        <img class="windows-login-avatar" id="windowsLoginAvatar" src="img/avatar.jpg" alt="" draggable="false">
+        <div class="windows-login-username" aria-hidden="true">尘柒</div>
+        <div class="windows-login-hint" aria-hidden="true">已进入登录页，您可以重启进入模拟 WinRE</div>
+        <button class="windows-login-restart is-selected" id="windowsLoginRestartButton" type="button">立即重新启动</button>
+        <div class="windows-login-clock" id="windowsLoginClock" aria-hidden="true">
+          <div class="windows-login-time" id="windowsLoginTime"></div>
+          <div class="windows-login-date" id="windowsLoginDate"></div>
         </div>
       </div>
 
@@ -218,6 +230,7 @@
         </div>
       </div>
 
+      <template id="uefiShellTemplate">
       <div class="uefi-shell" id="uefiShell">
         <header class="topbar">
           <div class="topbar-title">Aether UEFI</div>
@@ -455,6 +468,7 @@
           </section>
         </div>
       </div>
+      </template>
 
       <div class="modal-overlay" id="passwordDialog" hidden>
         <div class="modal-frame">
