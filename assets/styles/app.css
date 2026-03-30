@@ -699,6 +699,16 @@ body.auth-gate .uefi-shell {
   visibility: hidden;
 }
 
+body.auth-gate,
+body.auth-gate-show-wait,
+body.auth-gate-show-loader,
+body.auth-gate-blackhold,
+body.login-boot,
+body.login-boot-blackhold,
+body.login-boot-loading {
+  cursor: none;
+}
+
 body.auth-gate-blackhold .uefi-shell {
   visibility: hidden;
 }
